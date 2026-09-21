@@ -127,6 +127,10 @@ h1 { font-size: 1.4rem; margin: 0 0 4px; color: var(--ink); }
 .bot-btn:hover { background: rgba(255,255,255,0.6); }
 .bot-btn-remove { color: #a13a2f; border-color: #e0b3a8; }
 
+/* Pulsanti "assegna al computer" per i posti ancora liberi, mostrati nella
+   sala d'attesa (dopo essere entrati) invece che solo nella lobby iniziale. */
+.missing-bots-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+
 .color-btn {
   padding: 14px;
   border-radius: 10px;
@@ -2947,7 +2951,7 @@ function renderPawns(svg, board, pawns, lastSwap, lastCapture) {
 // Bumped by hand each time a new build is produced — shown in the lobby so
 // it's obvious at a glance whether you're on the latest version, instead
 // of guessing from a stale browser tab or cache.
-const APP_VERSION = "v3.2";
+const APP_VERSION = "v3.4";
 
 let myColor = null;
 let myRoomId = null;
@@ -3211,66 +3215,28 @@ async function continueAsNewPlayer(roomId) {
   }
 }
 
+// Ref Firebase dell'ascolto in tempo reale attivo sulla schermata "scegli
+// nome e colore" (prima di entrare) — al massimo uno alla volta, staccato
+// ogni volta che si lascia quella schermata (rientra in stanza, cambia
+// stanza, ecc.) per non restare ad ascoltare stanze che non si guardano più.
+let lobbyListenerRef = null;
+function stopLobbyListener() {
+  if (lobbyListenerRef) {
+    lobbyListenerRef.off();
+    lobbyListenerRef = null;
+  }
+}
+
 function renderManualLobby(roomId, existingPlayers) {
   const root = $("#app");
   root.innerHTML = "";
-  myColor = null; // una selezione precedente potrebbe non essere più libera
+  stopLobbyListener();
 
   const nameInput = el("input", {
     id: "name-input",
     placeholder: "il tuo nome",
     value: myName || "",
   });
-
-  // Le pedine sono raggruppate per squadra (TEAM_OF) invece che in una
-  // semplice griglia 2x2, con un badge "VS" al centro tra i due gruppi. I
-  // colori già presi da un altro giocatore in questa stanza sono disabilitati
-  // e mostrano CHI li ha presi (nome, o "computer") invece di un generico
-  // "(preso)" che non diceva nulla su chi ci fosse già dentro.
-  const takenColors = new Set(Object.keys(existingPlayers || {}));
-  const colorBtn = (c) => {
-    const occupant = existingPlayers && existingPlayers[c];
-    let label = colorLabel(c);
-    if (occupant) label += occupant.isBot ? " (computer)" : ` — ${occupant.name || colorLabel(c)}`;
-    return el("button", {
-      class: "color-btn color-" + c,
-      onclick: () => selectColor(c),
-      "data-color": c,
-      disabled: takenColors.has(c),
-    }, label);
-  };
-  // Ogni posto libero può anche essere affidato al computer invece che a
-  // una persona — comodo per provare/giocare quando non siete in 4. Un
-  // posto già assegnato al computer si può anche liberare di nuovo (mai un
-  // posto occupato da una persona vera).
-  const botCell = (c) => {
-    const taken = existingPlayers && existingPlayers[c];
-    if (!taken) {
-      return el(
-        "button",
-        { class: "bot-btn", onclick: () => assignBotToColor(roomId, c) },
-        "🤖 Assegna al computer"
-      );
-    }
-    if (taken.isBot) {
-      return el(
-        "button",
-        { class: "bot-btn bot-btn-remove", onclick: () => removeBotFromColor(roomId, c) },
-        "🤖 Libera questo posto"
-      );
-    }
-    return "";
-  };
-  const colorCell = (c) => el("div", { class: "color-cell" }, colorBtn(c), botCell(c));
-  const teamAColors = COLORS.filter((c) => TEAM_OF[c] === "A");
-  const teamBColors = COLORS.filter((c) => TEAM_OF[c] === "B");
-  const colorRow = el(
-    "div",
-    { class: "teams-grid" },
-    el("div", { class: "team-group" }, teamAColors.map(colorCell)),
-    el("div", { class: "team-group" }, teamBColors.map(colorCell)),
-    el("div", { class: "vs-badge" }, el("span", {}, "VS"))
-  );
 
   // Passi numerati (1-2-3): guidano l'occhio nell'ordine giusto invece di
   // lasciare nome/colore/pulsante alla stessa altezza visiva. "Entra nella
@@ -3288,19 +3254,109 @@ function renderManualLobby(roomId, existingPlayers) {
       stepLabel(1, "Il tuo nome"),
       nameInput,
       stepLabel(2, "Scegli il tuo colore"),
-      colorRow,
+      el("div", { id: "color-row-wrap" }), // riempito/aggiornato da renderLobbyColorSection
       stepLabel(3, "Entra in partita"),
       el("button", { id: "join-btn", class: "primary", disabled: true, onclick: () => joinManualRoom(roomId) }, "Entra nella stanza"),
       el("p", { id: "join-hint", class: "muted", style: "font-size:0.8rem;margin-top:6px;" }, "Scegli un colore per continuare."),
       el(
         "div",
         { class: "sound-test-row" },
-        el("button", { class: "sound-test-btn", onclick: renderLobby }, "◀ Cambia stanza"),
+        el("button", { class: "sound-test-btn", onclick: () => { stopLobbyListener(); renderLobby(); } }, "◀ Cambia stanza"),
         el("span", { class: "app-meta" }, `Tock by Mig · ${APP_VERSION} · © 2026 Mig`)
       ),
       homeScreenHint()
     )
   );
+
+  renderLobbyColorSection(roomId, existingPlayers);
+
+  // Ascolto in tempo reale: prima questa schermata era una fotografia presa
+  // una volta sola, quindi se un altro giocatore sceglieva un colore (o gli
+  // veniva assegnato un bot) mentre eri ancora qui, non lo vedevi finché non
+  // facevi tu stesso un'azione che la ricaricava. Ora si aggiorna da sola,
+  // senza toccare il nome che stai eventualmente scrivendo (solo la sezione
+  // dei colori viene ridisegnata, vedi renderLobbyColorSection).
+  const ref = roomRef(roomId);
+  ref.on("value", (snap) => {
+    const players = (snap.val() && normalizeState(snap.val()).players) || {};
+    renderLobbyColorSection(roomId, players);
+  });
+  lobbyListenerRef = ref;
+}
+
+// Ridisegna SOLO la sezione dei colori (griglia squadre + pulsanti bot) più
+// lo stato di "Entra nella stanza", senza toccare il resto della card —
+// così un aggiornamento in tempo reale non cancella mai il nome che stai
+// scrivendo nel campo sopra. Chiamata sia al primo render sia da ogni
+// tick dell'ascolto Firebase in renderManualLobby.
+function renderLobbyColorSection(roomId, existingPlayers) {
+  const wrap = $("#color-row-wrap");
+  if (!wrap) return; // non siamo più su questa schermata (es. si è già entrati)
+
+  // Una selezione già fatta non deve sparire solo perché la schermata si è
+  // aggiornata (da un'azione tua su un bot, o ora anche da un altro
+  // giocatore) — si azzera solo se quel colore è stato davvero preso.
+  if (myColor && existingPlayers && existingPlayers[myColor]) myColor = null;
+
+  // Le pedine sono raggruppate per squadra (TEAM_OF) invece che in una
+  // semplice griglia 2x2, con un badge "VS" al centro tra i due gruppi. I
+  // colori già presi da un altro giocatore in questa stanza sono disabilitati
+  // e mostrano CHI li ha presi (nome, o "computer") invece di un generico
+  // "(preso)" che non diceva nulla su chi ci fosse già dentro.
+  const takenColors = new Set(Object.keys(existingPlayers || {}));
+  const colorBtn = (c) => {
+    const occupant = existingPlayers && existingPlayers[c];
+    let label = colorLabel(c);
+    if (occupant) label += occupant.isBot ? " (computer)" : ` — ${occupant.name || colorLabel(c)}`;
+    return el("button", {
+      class: "color-btn color-" + c + (myColor === c ? " selected" : ""),
+      onclick: () => selectColor(c),
+      "data-color": c,
+      disabled: takenColors.has(c),
+    }, label);
+  };
+  // Ogni posto libero può anche essere affidato al computer invece che a
+  // una persona — comodo per provare/giocare quando non siete in 4. Un
+  // posto già assegnato al computer si può anche liberare di nuovo (mai un
+  // posto occupato da una persona vera). onDone è un no-op: l'ascolto
+  // realtime già attivo su questa schermata si occupa da solo di
+  // ridisegnare non appena Firebase conferma la scrittura.
+  const botCell = (c) => {
+    const taken = existingPlayers && existingPlayers[c];
+    if (!taken) {
+      return el(
+        "button",
+        { class: "bot-btn", onclick: () => assignBotToColor(roomId, c, () => {}) },
+        "🤖 Assegna al computer"
+      );
+    }
+    if (taken.isBot) {
+      return el(
+        "button",
+        { class: "bot-btn bot-btn-remove", onclick: () => removeBotFromColor(roomId, c, () => {}) },
+        "🤖 Libera questo posto"
+      );
+    }
+    return "";
+  };
+  const colorCell = (c) => el("div", { class: "color-cell" }, colorBtn(c), botCell(c));
+  const teamAColors = COLORS.filter((c) => TEAM_OF[c] === "A");
+  const teamBColors = COLORS.filter((c) => TEAM_OF[c] === "B");
+  wrap.innerHTML = "";
+  wrap.appendChild(
+    el(
+      "div",
+      { class: "teams-grid" },
+      el("div", { class: "team-group" }, teamAColors.map(colorCell)),
+      el("div", { class: "team-group" }, teamBColors.map(colorCell)),
+      el("div", { class: "vs-badge" }, el("span", {}, "VS"))
+    )
+  );
+
+  const joinBtn = $("#join-btn");
+  if (joinBtn) joinBtn.disabled = !myColor;
+  const hint = $("#join-hint");
+  if (hint) hint.style.display = myColor ? "none" : "";
 }
 
 // Riconosce il sistema dal browser (iOS/iPadOS vs Android vs altro) per
@@ -3420,6 +3476,7 @@ async function joinManualRoom(roomId) {
     await ref.child("players").child(myColor).set({ name: myName, token: claimToken });
   }
 
+  stopLobbyListener(); // si lascia la schermata pre-ingresso: da qui in poi ci pensa watchRoom
   watchRoom(roomId, onStateChange);
   renderGameShell();
 }
@@ -3428,7 +3485,14 @@ async function joinManualRoom(roomId) {
 // provare o giocare anche quando non siete in 4. Se la stanza non esiste
 // ancora (nessuno l'ha creata cliccando "Entra nella stanza"), il computer
 // può comunque essere il primo occupante: la creiamo qui allo stesso modo.
-async function assignBotToColor(roomId, color) {
+//
+// `onDone`, se passato, sostituisce il ri-render di default (pensato per la
+// lobby PRIMA di entrare, dove non c'è ancora un ascoltatore realtime
+// attivo). Chiamata invece dalla sala d'attesa DOPO essere entrati — dove
+// watchRoom/onStateChange è già in ascolto e si aggiorna da solo — basta
+// passare un no-op per evitare di essere rispediti per errore alla
+// schermata di scelta colore/nome.
+async function assignBotToColor(roomId, color, onDone) {
   unlockAudio();
   try {
     const ref = roomRef(roomId);
@@ -3448,13 +3512,15 @@ async function assignBotToColor(roomId, color) {
     alert("Non riesco ad assegnare il computer: " + e.message);
     return;
   }
+  if (onDone) { onDone(); return; }
   const snap2 = await roomRef(roomId).get();
   renderManualLobby(roomId, (snap2.val() && snap2.val().players) || {});
 }
 
 // Libera un posto assegnato al computer (mai un posto occupato da una
 // persona vera — il controllo isBot dentro la transazione lo garantisce).
-async function removeBotFromColor(roomId, color) {
+// Stesso discorso di `onDone` sopra.
+async function removeBotFromColor(roomId, color, onDone) {
   try {
     await updateState(roomId, (state) => {
       const p = state.players[color];
@@ -3465,6 +3531,7 @@ async function removeBotFromColor(roomId, color) {
     alert("Errore: " + e.message);
     return;
   }
+  if (onDone) { onDone(); return; }
   const snap = await roomRef(roomId).get();
   renderManualLobby(roomId, (snap.val() && snap.val().players) || {});
 }
@@ -4807,13 +4874,33 @@ function renderStartControls(state) {
   wrap.innerHTML = "";
   if (state.phase !== "lobby") return;
   const joined = Object.keys(state.players || {});
+  const missing = COLORS.filter((c) => !state.players[c]);
+  // Se hai dimenticato di assegnare qualche posto al computer prima di
+  // entrare, non serve più uscire e rientrare nella stanza (cosa che tra
+  // l'altro non riportava alla schermata giusta): si può fare da qui,
+  // direttamente nella sala d'attesa. watchRoom/onStateChange è già in
+  // ascolto, quindi basta il giro Firebase per far ricomparire questa
+  // schermata aggiornata da sola.
   wrap.appendChild(
     el(
       "div",
       { class: "start-card" },
       el("p", {}, `Giocatori nella stanza: ${joined.map(colorLabel).join(", ") || "nessuno"}`),
+      missing.length > 0
+        ? el(
+            "div",
+            { class: "missing-bots-row" },
+            missing.map((c) =>
+              el(
+                "button",
+                { class: "bot-btn", onclick: () => assignBotToColor(myRoomId, c, () => {}) },
+                `🤖 ${colorLabel(c)} al computer`
+              )
+            )
+          )
+        : "",
       el("p", { class: "muted" }, "Servono tutti e 4 i colori per iniziare (rosso+giallo vs verde+blu)."),
-      el("button", { class: "primary", onclick: startGame }, "Inizia partita")
+      el("button", { class: "primary", disabled: missing.length > 0, onclick: startGame }, "Inizia partita")
     )
   );
 }
