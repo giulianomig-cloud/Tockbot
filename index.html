@@ -2069,7 +2069,7 @@ function applySevenDistribution(state, color, distribution) {
     }
     state.pawns[color][pawnIndex] = dest;
     if (oldPos < 1000 && dest >= 1000) recordHomeEntry(state, color, pawnIndex, dest);
-    recordLastMove(state, color, pawnIndex, dest);
+    recordLastMove(state, color, pawnIndex, dest, oldPos);
     setLapped(state, color, pawnIndex, dest < 1000 && dest === BOARD.baseIndex[color]);
     moves.push(`#${pawnIndex + 1} ${posLabel(color, oldPos)}→${posLabel(color, dest)}`);
   }
@@ -2097,13 +2097,20 @@ function recordCapture(state, occ, atPos, byColor) {
 // pulsante "🔁 Rivedi ultima mossa": quelle altre tre hanno già un flash
 // automatico dedicato, ma una mossa "normale" fin qui non aveva nessun
 // evento tracciato da poter rievocare a comando.
-function recordLastMove(state, color, pawnIndex, toPos) {
+function recordLastMove(state, color, pawnIndex, toPos, fromPos) {
   state.lastMove = {
     id: (state.lastMove && state.lastMove.id ? state.lastMove.id : 0) + 1,
     ts: Date.now(),
     color,
     pawnIndex,
     pos: toPos,
+    // Posizione di partenza (facoltativa: -1/undefined se la pedina entra
+    // in gioco) — usata da "Rivedi ultima mossa" per far scorrere davvero
+    // una pedina-fantasma dal punto di partenza a quello di arrivo, invece
+    // di limitarsi a un anello statico sulla casella finale (che passava
+    // facilmente inosservato — segnalato: "non fa rivedere l'ultimo
+    // movimento").
+    from: fromPos,
   };
 }
 
@@ -2183,7 +2190,7 @@ function applyMove(state, color, card, move) {
     }
     state.pawns[color][move.pawnIndex] = baseIdx;
     setLapped(state, color, move.pawnIndex, false); // fresh entry, hasn't lapped
-    recordLastMove(state, color, move.pawnIndex, baseIdx);
+    recordLastMove(state, color, move.pawnIndex, baseIdx, -1);
     state.log.push(`${cn(color)} #${move.pawnIndex + 1} entra in gioco con ${cardLog(card)} (sulla base).`);
     return;
   }
@@ -2200,7 +2207,7 @@ function applyMove(state, color, card, move) {
       }
     }
     state.pawns[color][move.pawnIndex] = dest;
-    recordLastMove(state, color, move.pawnIndex, dest);
+    recordLastMove(state, color, move.pawnIndex, dest, oldPos);
     // Festeggia solo il vero INGRESSO in casa (dal percorso esterno), non
     // uno spostamento tra due caselle-casa già interne (es. casa#1→casa#3
     // con un'altra carta) — quello non è un "arrivo", la pedina era già a
@@ -2935,6 +2942,61 @@ function flashHomeEntry(svg, board, color, homeIdx) {
 // attiva SOLO su richiesta esplicita, e va bene anche per una mossa
 // "semplice" (nessuna mangiata, nessun arrivo in casa) che altrimenti non
 // avrebbe alcun feedback visivo diverso dal semplice spostamento.
+// "Rivedi ultima mossa" per una mossa NORMALE (non Jack/presa/arrivo in
+// casa, che hanno già il loro flash dedicato): prima un semplice anello
+// statico sulla sola casella di arrivo passava facilmente inosservato
+// (segnalato: "non fa rivedere l'ultimo movimento" — non c'era nessun
+// movimento vero e proprio da vedere, solo un lampo fermo). Ora fa scorrere
+// una pedina-fantasma lungo il percorso REALE ricostruito da
+// pathForAnimation (stessa logica usata per animare le pedine vere quando
+// si muovono dal vivo), dalla casella di partenza a quella di arrivo, poi
+// chiude con l'anello sulla casella finale.
+let replayAnimSeq = 0;
+
+function flashMoveReplay(svg, board, color, fromPos, toPos) {
+  if (toPos == null || toPos < 0) return;
+  const path =
+    fromPos != null && fromPos !== -1 && fromPos !== toPos
+      ? pathForAnimation(color, fromPos, toPos)
+      : null;
+  if (!path || path.length < 1) {
+    // Percorso non ricostruibile (es. pedina appena entrata in gioco): resta
+    // comunque il solo anello sulla casella di arrivo.
+    flashMoveHighlight(svg, board, color, toPos);
+    return;
+  }
+  replayAnimSeq++;
+  const myGen = replayAnimSeq;
+  const ns = "http://www.w3.org/2000/svg";
+  const R = board.cellRadiusMm;
+  const ghost = document.createElementNS(ns, "g");
+  ghost.setAttribute("class", "replay-ghost-pawn");
+  const startCell = cellForColor(board, color, fromPos);
+  const circle = ns_el("circle", {
+    cx: 0, cy: 0, r: R * 0.85,
+    fill: BASE_COL[color], stroke: "#fffefb", "stroke-width": 2.5, opacity: 0.85,
+  });
+  ghost.appendChild(circle);
+  ghost.setAttribute("transform", `translate(${startCell.x},${startCell.y})`);
+  svg.appendChild(ghost);
+
+  const stepMs = 160;
+  let i = 0;
+  const step = () => {
+    if (replayAnimSeq !== myGen) { ghost.remove(); return; } // superseded by another press
+    if (i >= path.length) {
+      ghost.remove();
+      flashMoveHighlight(svg, board, color, toPos);
+      return;
+    }
+    const cell = cellForColor(board, color, path[i]);
+    ghost.setAttribute("transform", `translate(${cell.x},${cell.y})`);
+    i++;
+    setTimeout(step, stepMs);
+  };
+  step();
+}
+
 function flashMoveHighlight(svg, board, color, pos) {
   if (pos == null || pos < 0) return;
   const p = pos >= 1000 ? board.homePaths[color][pos - 1000] : board.loopCells[pos];
@@ -3270,7 +3332,7 @@ function renderPawns(svg, board, pawns, lastSwap, lastCapture, lastHomeEntry) {
 // Bumped by hand each time a new build is produced — shown in the lobby so
 // it's obvious at a glance whether you're on the latest version, instead
 // of guessing from a stale browser tab or cache.
-const APP_VERSION = "v3.8";
+const APP_VERSION = "v3.9";
 
 let myColor = null;
 let myRoomId = null;
@@ -5854,7 +5916,7 @@ function replayLastMove() {
   } else if (latest === currentState.lastHomeEntry) {
     flashHomeEntry(boardSvg, BOARD, latest.color, latest.pos - 1000);
   } else {
-    flashMoveHighlight(boardSvg, BOARD, latest.color, latest.pos);
+    flashMoveReplay(boardSvg, BOARD, latest.color, latest.from, latest.pos);
   }
 }
 
