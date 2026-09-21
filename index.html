@@ -1804,7 +1804,7 @@ function jackableTargets(state) {
   );
 }
 
-function applyJackSwap(state, a, b) {
+function applyJackSwap(state, a, b, active) {
   const posA = state.pawns[a.color][a.pawnIndex];
   const posB = state.pawns[b.color][b.pawnIndex];
   if (posA >= 1000 || posB >= 1000) {
@@ -1816,7 +1816,14 @@ function applyJackSwap(state, a, b) {
   // ambiguous "sitting on own base" flag to the safe default either way.
   setLapped(state, a.color, a.pawnIndex, false);
   setLapped(state, b.color, b.pawnIndex, false);
-  state.log.push(`scambio (Jack) tra ${cn(a.color)}#${a.pawnIndex + 1} (${posLabel(a.color, posA)}→${posLabel(a.color, posB)}) e ${cn(b.color)}#${b.pawnIndex + 1} (${posLabel(b.color, posB)}→${posLabel(b.color, posA)}).`);
+  // Il Jack può scambiare DUE PEDINE QUALSIASI sul percorso, non
+  // necessariamente quella di chi gioca la carta — quindi il colore di chi
+  // ha effettivamente giocato (active) va detto esplicitamente, altrimenti
+  // il log nomina solo i due colori scambiati e chi ha agito scompare (bug
+  // segnalato: "il colore nel log non è esatto"). `active` è opzionale per
+  // compatibilità con le simulazioni interne del bot, che scartano il log.
+  const actorPrefix = active ? `${cn(active)} gioca un Jack: ` : `scambio (Jack) tra `;
+  state.log.push(`${actorPrefix}${cn(a.color)}#${a.pawnIndex + 1} (${posLabel(a.color, posA)}→${posLabel(a.color, posB)}) e ${cn(b.color)}#${b.pawnIndex + 1} (${posLabel(b.color, posB)}→${posLabel(b.color, posA)}).`);
   // recorded so every client can flash/highlight the swap on the board
   state.lastSwap = {
     id: (state.lastSwap && state.lastSwap.id ? state.lastSwap.id : 0) + 1,
@@ -2125,7 +2132,7 @@ function applyMove(state, color, card, move) {
   }
 
   if (move.type === "jack") {
-    applyJackSwap(state, move.a, move.b);
+    applyJackSwap(state, move.a, move.b, color);
     return;
   }
 
@@ -2240,6 +2247,26 @@ function watchRoom(roomId, callback) {
 
 function writeState(roomId, state) {
   return roomRef(roomId).set(state);
+}
+
+// Fissa la modalità della stanza (manuale o a estrazione) SUBITO, appena
+// chi crea la stanza la sceglie — non solo quando quella persona finisce
+// di scegliere nome/colore e preme "entra". Prima di questa funzione la
+// modalità restava solo lato client finché non arrivava la prima vera
+// scrittura su Firebase (joinManualRoom/joinDraftRoom): se un secondo
+// giocatore apriva lo stesso codice stanza in quella finestra di tempo,
+// trovava ancora "nessuna stanza" e poteva scegliere una modalità diversa
+// per conto suo (bug segnalato: "chi entra dopo non entra dove ho deciso
+// io"). Una transazione crea la stanza SOLO se non esiste ancora — se due
+// persone la creano nello stesso istante, vince chi arriva per primo e
+// l'altro trova comunque la modalità già decisa nel risultato restituito.
+async function claimRoomMode(roomId, mode) {
+  const ref = roomRef(roomId);
+  const result = await ref.transaction((current) => {
+    if (current !== null) return current; // già creata (da noi o da un altro) — non toccare
+    return newGameState({}, mode);
+  });
+  return normalizeState(result.snapshot.val());
 }
 
 async function updateState(roomId, mutatorFn) {
@@ -2951,7 +2978,7 @@ function renderPawns(svg, board, pawns, lastSwap, lastCapture) {
 // Bumped by hand each time a new build is produced — shown in the lobby so
 // it's obvious at a glance whether you're on the latest version, instead
 // of guessing from a stale browser tab or cache.
-const APP_VERSION = "v3.5";
+const APP_VERSION = "v3.6";
 
 let myColor = null;
 let myRoomId = null;
@@ -3122,13 +3149,13 @@ function renderModeChoice(roomId) {
         { class: "mode-choice" },
         el(
           "button",
-          { class: "mode-btn", onclick: () => renderManualLobby(roomId, {}) },
+          { class: "mode-btn", onclick: () => pickRoomMode(roomId, "manual") },
           el("div", { class: "mt" }, "🎨 Scelgo io i colori"),
           el("div", { class: "ms" }, "Ogni giocatore entra e sceglie subito il proprio colore, come sempre.")
         ),
         el(
           "button",
-          { class: "mode-btn", onclick: () => renderDraftNameScreen(roomId) },
+          { class: "mode-btn", onclick: () => pickRoomMode(roomId, "draw") },
           el("div", { class: "mt" }, "🎲 Estrazione a sorte"),
           el("div", { class: "ms" }, "Si entra con solo il nome; quando siete in 4, coppie e colori si decidono a caso.")
         )
@@ -3138,6 +3165,30 @@ function renderModeChoice(roomId) {
       el("button", { class: "sound-test-btn", style: "margin-top:6px;", onclick: renderLobby }, "◀ Cambia stanza")
     )
   );
+}
+
+// Chiamata al click su una delle due modalità. Non naviga semplicemente
+// alla schermata scelta: prima fissa la modalità su Firebase con
+// claimRoomMode (transazione "crea solo se non esiste"), poi guarda quale
+// modalità è REALMENTE risultata sulla stanza. Di solito coincide con
+// quella cliccata, ma se qualcun altro ha creato la stanza un istante
+// prima con l'altra modalità, la transazione non la sovrascrive: in quel
+// caso si segue la modalità già decisa da quell'altra persona, invece di
+// aprire comunque la schermata sbagliata.
+async function pickRoomMode(roomId, mode) {
+  let state;
+  try {
+    state = await claimRoomMode(roomId, mode);
+  } catch (e) {
+    alert("Non riesco a creare la stanza, riprova.");
+    console.error(e);
+    return;
+  }
+  if (state.roomMode === "draw") {
+    renderDraftNameScreen(roomId);
+  } else {
+    renderManualLobby(roomId, state.players || {});
+  }
 }
 
 // Permette di rientrare in una stanza già avviata da un dispositivo
@@ -4571,7 +4622,7 @@ function botSimulate(state, active, card, move) {
     phase: "playing",
     winnerTeam: null,
   };
-  if (move.type === "jack") applyJackSwap(clone, move.a, move.b);
+  if (move.type === "jack") applyJackSwap(clone, move.a, move.b, active);
   else if (move.type === "seven") applySevenDistribution(clone, active, move.distribution);
   else applyMove(clone, active, card, move);
   return clone;
