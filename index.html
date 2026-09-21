@@ -2951,7 +2951,7 @@ function renderPawns(svg, board, pawns, lastSwap, lastCapture) {
 // Bumped by hand each time a new build is produced — shown in the lobby so
 // it's obvious at a glance whether you're on the latest version, instead
 // of guessing from a stale browser tab or cache.
-const APP_VERSION = "v3.4";
+const APP_VERSION = "v3.5";
 
 let myColor = null;
 let myRoomId = null;
@@ -3443,6 +3443,14 @@ async function joinManualRoom(roomId) {
   myRoomId = roomId;
   myName = name || colorLabel(myColor);
 
+  // FONDAMENTALE: va staccato PRIMA di scrivere su Firebase, non dopo.
+  // L'ascolto in tempo reale della lobby (aggiunto in v3.4) reagisce anche
+  // alla nostra STESSA scrittura qui sotto — la vede arrivare come "questo
+  // colore è stato preso" e azzerava myColor proprio mentre stavamo
+  // entrando (bug: "Sei: Giuliano (undefined) · squadra undefined").
+  // Staccarlo subito, prima dello scrivere, elimina la corsa critica.
+  stopLobbyListener();
+
   const ref = roomRef(roomId);
   const snap = await ref.get();
   const claimToken = getOrCreateClaimToken(roomId, myColor);
@@ -3476,7 +3484,7 @@ async function joinManualRoom(roomId) {
     await ref.child("players").child(myColor).set({ name: myName, token: claimToken });
   }
 
-  stopLobbyListener(); // si lascia la schermata pre-ingresso: da qui in poi ci pensa watchRoom
+  // (l'ascolto della lobby è già stato staccato in cima alla funzione)
   watchRoom(roomId, onStateChange);
   renderGameShell();
 }
