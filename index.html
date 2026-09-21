@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>Tock</title>
 <link rel="manifest" href="manifest.json" />
-<meta name="theme-color" content="#3a2b1c" />
+<meta name="theme-color" content="#301c3a" />
 <link rel="apple-touch-icon" href="icon-192.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -240,6 +240,37 @@ button.primary:active {
   box-shadow: 0 1px 0 rgba(0,0,0,0.35);
   filter: brightness(0.92);
 }
+button.primary:disabled {
+  opacity: 0.4;
+  cursor: default;
+  box-shadow: none;
+}
+
+/* Passi numerati 1-2-3 nella lobby: guidano l'occhio nell'ordine giusto
+   (nome → colore → entra) invece di lasciare i tre blocchi alla stessa
+   altezza visiva. */
+.step-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #5a4a38;
+}
+.step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--cream);
+  font-size: 0.68rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
 button.secondary {
   padding: 10px 14px;
   border-radius: 8px;
@@ -354,7 +385,10 @@ button.danger:active {
   border: 2px solid var(--panel-border);
 }
 .status-chip-active { border-color: var(--gold); background: #fff3d6; }
-.status-name { font-weight: 600; }
+/* flex:1 + min-width:0 fanno sì che il nome si restringa (ellissi) invece
+   di andare a capo in modo incoerente tra un box e l'altro a seconda che
+   sia presente o no l'icona del mazziere accanto. */
+.status-name { font-weight: 600; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mini-pawns { width: 62px; height: 14px; flex-shrink: 0; }
 .dealer-icon { width: 18px; height: 18px; flex-shrink: 0; }
 
@@ -2913,7 +2947,7 @@ function renderPawns(svg, board, pawns, lastSwap, lastCapture) {
 // Bumped by hand each time a new build is produced — shown in the lobby so
 // it's obvious at a glance whether you're on the latest version, instead
 // of guessing from a stale browser tab or cache.
-const APP_VERSION = "v3.1";
+const APP_VERSION = "v3.2";
 
 let myColor = null;
 let myRoomId = null;
@@ -3190,15 +3224,21 @@ function renderManualLobby(roomId, existingPlayers) {
 
   // Le pedine sono raggruppate per squadra (TEAM_OF) invece che in una
   // semplice griglia 2x2, con un badge "VS" al centro tra i due gruppi. I
-  // colori già presi da un altro giocatore in questa stanza sono disabilitati.
+  // colori già presi da un altro giocatore in questa stanza sono disabilitati
+  // e mostrano CHI li ha presi (nome, o "computer") invece di un generico
+  // "(preso)" che non diceva nulla su chi ci fosse già dentro.
   const takenColors = new Set(Object.keys(existingPlayers || {}));
-  const colorBtn = (c) =>
-    el("button", {
+  const colorBtn = (c) => {
+    const occupant = existingPlayers && existingPlayers[c];
+    let label = colorLabel(c);
+    if (occupant) label += occupant.isBot ? " (computer)" : ` — ${occupant.name || colorLabel(c)}`;
+    return el("button", {
       class: "color-btn color-" + c,
       onclick: () => selectColor(c),
       "data-color": c,
       disabled: takenColors.has(c),
-    }, colorLabel(c) + (takenColors.has(c) ? " (preso)" : ""));
+    }, label);
+  };
   // Ogni posto libero può anche essere affidato al computer invece che a
   // una persona — comodo per provare/giocare quando non siete in 4. Un
   // posto già assegnato al computer si può anche liberare di nuovo (mai un
@@ -3216,7 +3256,7 @@ function renderManualLobby(roomId, existingPlayers) {
       return el(
         "button",
         { class: "bot-btn bot-btn-remove", onclick: () => removeBotFromColor(roomId, c) },
-        "🤖 Computer — libera"
+        "🤖 Libera questo posto"
       );
     }
     return "";
@@ -3232,15 +3272,26 @@ function renderManualLobby(roomId, existingPlayers) {
     el("div", { class: "vs-badge" }, el("span", {}, "VS"))
   );
 
+  // Passi numerati (1-2-3): guidano l'occhio nell'ordine giusto invece di
+  // lasciare nome/colore/pulsante alla stessa altezza visiva. "Entra nella
+  // stanza" parte disabilitato e si accende solo dopo aver scelto un
+  // colore (vedi selectColor) — prima si poteva premerlo a vuoto.
+  const stepLabel = (n, text) =>
+    el("div", { class: "step-label" }, el("span", { class: "step-num" }, String(n)), text);
+
   root.appendChild(
     el(
       "div",
       { class: "lobby-card" },
       el("h1", {}, "Tock"),
       el("p", { class: "muted" }, `Stanza ${roomId} — inserisci il tuo nome e scegli il tuo colore.`),
+      stepLabel(1, "Il tuo nome"),
       nameInput,
+      stepLabel(2, "Scegli il tuo colore"),
       colorRow,
-      el("button", { id: "join-btn", class: "primary", onclick: () => joinManualRoom(roomId) }, "Entra nella stanza"),
+      stepLabel(3, "Entra in partita"),
+      el("button", { id: "join-btn", class: "primary", disabled: true, onclick: () => joinManualRoom(roomId) }, "Entra nella stanza"),
+      el("p", { id: "join-hint", class: "muted", style: "font-size:0.8rem;margin-top:6px;" }, "Scegli un colore per continuare."),
       el(
         "div",
         { class: "sound-test-row" },
@@ -3312,14 +3363,21 @@ function swatchDot(color) {
 function playerName(state, c) {
   const p = state && state.players && state.players[c];
   const n = p && p.name;
-  const base = n && n.trim() ? n.trim() : colorLabel(c);
-  return p && p.isBot ? base + " 🤖" : base;
+  // Il nome del bot è già "Bot <Colore>" (assegnato in assignBotToColor),
+  // quindi distingue da solo un bot dall'altro senza bisogno di appendere
+  // un'emoji uguale per tutti e quattro — prima "Computer 🤖" ripetuto
+  // identico per ogni colore si leggeva solo dal pallino colorato davanti.
+  return n && n.trim() ? n.trim() : colorLabel(c);
 }
 
 function selectColor(c) {
   myColor = c;
   document.querySelectorAll(".color-btn").forEach((b) => b.classList.remove("selected"));
   document.querySelector(`.color-${c}`).classList.add("selected");
+  const joinBtn = document.getElementById("join-btn");
+  if (joinBtn) joinBtn.disabled = false;
+  const hint = document.getElementById("join-hint");
+  if (hint) hint.style.display = "none";
 }
 
 async function joinManualRoom(roomId) {
@@ -3377,13 +3435,13 @@ async function assignBotToColor(roomId, color) {
     const snap = await ref.get();
     if (!snap.exists()) {
       const players = {};
-      players[color] = { name: "Computer", token: "BOT-" + color, isBot: true };
+      players[color] = { name: "Bot " + colorLabel(color), token: "BOT-" + color, isBot: true };
       const state = newGameState(players, "manual");
       await writeState(roomId, state);
     } else {
       await updateState(roomId, (state) => {
         if (state.players[color]) throw new Error("questo colore è già stato preso");
-        state.players[color] = { name: "Computer", token: "BOT-" + color, isBot: true };
+        state.players[color] = { name: "Bot " + colorLabel(color), token: "BOT-" + color, isBot: true };
       });
     }
   } catch (e) {
@@ -4009,7 +4067,46 @@ function testSound() {
 
 // Tracks the last event of each kind this client has already reacted to,
 // so a sound plays exactly once per event, never replayed after a reload.
-const soundTracker = { turnColor: null, captureId: null, swapId: null, chatCount: null };
+const soundTracker = { turnColor: null, captureId: null, swapId: null, chatCount: null, finished: false };
+
+// Feedback aptico (vibrazione) per gli eventi chiave — un tocco fisico in
+// più oltre al suono, utile soprattutto su mobile quando non si sta
+// fissando lo schermo. La Vibration API non esiste ovunque (Safari/iOS non
+// la supporta affatto): il controllo `navigator.vibrate` e il try/catch
+// fanno sì che, dove manca, semplicemente non succeda nulla invece di
+// rompere il resto.
+function vibrate(pattern) {
+  try {
+    if (navigator.vibrate) navigator.vibrate(pattern);
+  } catch (e) {}
+}
+
+// Titolo originale della scheda del browser, salvato una volta sola
+// all'avvio: usato per "lampeggiare" il titolo quando tocca a te e la
+// scheda non è in primo piano, un avviso più forte del solo bordo dorato
+// pulsante (che non si vede se non si sta guardando la pagina). Torna al
+// titolo normale non appena la scheda riprende il focus.
+const ORIGINAL_TITLE = document.title;
+let titleFlashTimer = null;
+function flashTitleForMyTurn() {
+  if (!document.hidden) return; // già davanti allo schermo: il bordo dorato basta
+  if (titleFlashTimer) return;
+  let on = false;
+  titleFlashTimer = setInterval(() => {
+    document.title = on ? ORIGINAL_TITLE : "🔴 Tocca a te! — Tock";
+    on = !on;
+  }, 900);
+}
+function stopTitleFlash() {
+  if (titleFlashTimer) {
+    clearInterval(titleFlashTimer);
+    titleFlashTimer = null;
+  }
+  document.title = ORIGINAL_TITLE;
+}
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) stopTitleFlash();
+});
 
 function maybePlaySounds(state) {
   if (state.phase === "playing") {
@@ -4018,6 +4115,12 @@ function maybePlaySounds(state) {
     } else if (state.turnColor !== soundTracker.turnColor) {
       soundTracker.turnColor = state.turnColor;
       playSound("turnStart"); // everyone hears every turn change, not just the player whose turn it is
+      if (state.turnColor === myColor) {
+        vibrate(40); // un colpetto breve: tocca a te
+        flashTitleForMyTurn();
+      } else {
+        stopTitleFlash(); // non è (più) il tuo turno: niente da segnalare
+      }
     }
   }
 
@@ -4028,7 +4131,10 @@ function maybePlaySounds(state) {
     } else if (cap.id !== soundTracker.captureId) {
       soundTracker.captureId = cap.id;
       const ageMs = Date.now() - (cap.ts || 0);
-      if (ageMs >= 0 && ageMs < 4000) playSound("captureMade"); // one shared sound for everyone, regardless of who captured whom
+      if (ageMs >= 0 && ageMs < 4000) {
+        playSound("captureMade"); // one shared sound for everyone, regardless of who captured whom
+        vibrate(60);
+      }
     }
   }
 
@@ -4041,6 +4147,16 @@ function maybePlaySounds(state) {
       const ageMs = Date.now() - (swap.ts || 0);
       if (ageMs >= 0 && ageMs < 4000) playSound("jackPlayed");
     }
+  }
+
+  if (state.phase === "finished") {
+    if (!soundTracker.finished) {
+      soundTracker.finished = true;
+      vibrate([80, 60, 80, 60, 160]); // pattern più lungo e distinto: fine partita
+      stopTitleFlash();
+    }
+  } else {
+    soundTracker.finished = false;
   }
 
   const chatCount = (state.chat || []).length;
@@ -4189,6 +4305,69 @@ async function botPlayTurn() {
   });
 }
 
+// Jack e 7 sono carte preziose e versatili: tenerle in mano per il momento
+// giusto vale spesso più che spenderle appena c'è una mossa legale
+// qualsiasi. Penalità applicata al loro punteggio quando giocarle ORA non
+// porta un vantaggio tattico chiaro (vedi botMoveIsTactical) — così il bot
+// preferisce, a parità di convenienza, una carta più "semplice" e si tiene
+// il Jack/7 per quando serve davvero.
+const BOT_HOLD_PENALTY = { J: 7, "7": 5 };
+
+// Vero se la pedina `color`#`pawnIndex` è "a tiro": un avversario a 1-10
+// passi da lei potrebbe raggiungerla con una sola carta nel prossimo turno.
+function botPawnThreatened(pawns, color, pawnIndex) {
+  const pos = pawns[color][pawnIndex];
+  if (pos === -1 || pos >= 1000) return false;
+  for (const oc of COLORS) {
+    if (oc === color) continue;
+    for (let j = 0; j < 4; j++) {
+      const opos = pawns[oc][j];
+      if (opos === -1 || opos >= 1000) continue;
+      const dist = (pos - opos + 64) % 64;
+      if (dist >= 1 && dist <= 10) return true;
+    }
+  }
+  return false;
+}
+
+// Dice se giocare ORA questo Jack/7 porta un vantaggio tattico chiaro: mangia
+// una pedina avversaria, fa entrare una pedina in casa, salva una pedina
+// minacciata (propria o del compagno) o rispedisce indietro parecchio una
+// pedina avversaria. Solo in quel caso vale la pena spendere la carta subito
+// — altrimenti la penalità di BOT_HOLD_PENALTY fa preferire un'alternativa.
+function botMoveIsTactical(state, active, card, move) {
+  const after = botSimulate(state, active, card, move);
+  if (after.lastCapture) return true; // mangia una pedina avversaria
+
+  if (move.type === "move") {
+    const dest = move.path[move.path.length - 1];
+    if (dest >= 1000) return true; // entra in casa
+  }
+
+  if (move.type === "seven") {
+    for (let i = 0; i < 4; i++) {
+      if (state.pawns[active][i] !== -1 && state.pawns[active][i] < 1000 && after.pawns[active][i] >= 1000) return true;
+    }
+  }
+
+  if (move.type === "jack") {
+    for (const target of [move.a, move.b]) {
+      const before = state.pawns[target.color][target.pawnIndex];
+      const afterPos = after.pawns[target.color][target.pawnIndex];
+      if (before === -1 || before >= 1000) continue;
+      if (TEAM_OF[target.color] !== TEAM_OF[active]) {
+        const beforeSteps = stepsFromOwnBase(target.color, before, hasLapped(state, target.color, target.pawnIndex));
+        const afterSteps = afterPos >= 1000 ? 0 : stepsFromOwnBase(target.color, afterPos, hasLapped(after, target.color, target.pawnIndex));
+        if (beforeSteps - afterSteps >= 15) return true; // rispedita indietro parecchio
+      } else if (botPawnThreatened(state.pawns, target.color, target.pawnIndex) && !botPawnThreatened(after.pawns, target.color, target.pawnIndex)) {
+        return true; // salvata da una minaccia imminente
+      }
+    }
+  }
+
+  return false;
+}
+
 // Sceglie la migliore coppia (carta, mossa) tra TUTTE quelle disponibili
 // nella mano del bot — non solo la prima carta con una mossa legale.
 function botChooseCardAndMove(state, active, seat) {
@@ -4197,7 +4376,11 @@ function botChooseCardAndMove(state, active, seat) {
   let best = null, bestScore = -Infinity;
   for (const card of hand) {
     for (const move of botCandidatesForCard(state, active, card)) {
-      const score = botScoreMove(state, active, card, move, botTeam) + Math.random() * 0.01;
+      let score = botScoreMoveDeep(state, active, card, move, botTeam);
+      const holdPenalty = BOT_HOLD_PENALTY[rankOf(card)];
+      if (holdPenalty && !botMoveIsTactical(state, active, card, move)) score -= holdPenalty;
+      score += botCoordinationAdjustment(state, active, seat, card, move);
+      score += Math.random() * 0.01;
       if (score > bestScore) {
         bestScore = score;
         best = { card, move };
@@ -4209,6 +4392,41 @@ function botChooseCardAndMove(state, active, seat) {
     return { burn: true, card: botCardToGiveAway(state, seat) };
   }
   return { burn: false, card: best.card, move: best.move };
+}
+
+// Vero se `seat`, con la propria mano ATTUALE, ha già una carta che da sola
+// toglierebbe la pedina `color`#`pawnIndex` dal pericolo (la sposta al
+// sicuro, o mangia chi la minaccia).
+function botSeatCanRescue(state, seat, color, pawnIndex) {
+  const active = activeColorFor(state, seat);
+  if (!active) return false;
+  for (const card of state.hands[seat]) {
+    for (const move of botCandidatesForCard(state, active, card)) {
+      const after = botSimulate(state, active, card, move);
+      if (!botPawnThreatened(after.pawns, color, pawnIndex)) return true;
+    }
+  }
+  return false;
+}
+
+// Coordinazione col compagno: se questa mossa mette al sicuro una pedina del
+// compagno che lui avrebbe comunque potuto salvare da solo al suo prossimo
+// turno, è "sforzo duplicato" — leggera penalità, per lasciare al bot spazio
+// di occuparsi d'altro. Se invece salva una pedina del compagno che LUI non
+// avrebbe potuto salvare (nessuna carta utile in mano sua), è una copertura
+// reale — piccolo bonus. Fuori da questi casi non cambia nulla.
+function botCoordinationAdjustment(state, active, seat, card, move) {
+  const partner = PARTNER_OF[seat];
+  const after = botSimulate(state, active, card, move);
+  let delta = 0;
+  for (let i = 0; i < 4; i++) {
+    const pos = state.pawns[partner][i];
+    if (pos === -1 || pos >= 1000) continue;
+    if (!botPawnThreatened(state.pawns, partner, i)) continue;
+    if (botPawnThreatened(after.pawns, partner, i)) continue; // non l'ha messa al sicuro
+    delta += botSeatCanRescue(state, partner, partner, i) ? -2 : 3;
+  }
+  return delta;
 }
 
 // Espande le opzioni "grezze" di legalMovesForCard in mosse concrete,
@@ -4291,6 +4509,141 @@ function botScoreMove(state, active, card, move, botTeam) {
   return score;
 }
 
+// --- Ricerca in profondità (lookahead) ------------------------------------
+//
+// Finora il bot valutava solo il risultato IMMEDIATO di una mossa (un solo
+// "ply"). Qui si aggiunge un vero orizzonte: dopo una mossa candidata si
+// simulano alcuni turni successivi — compagno e avversari compresi —
+// ciascuno dei quali sceglie, tra le proprie opzioni migliori (limitate a un
+// piccolo ventaglio, "beam", per restare veloce), quella che avvantaggia di
+// più la propria squadra in quel momento. Chi decide ORA valuta poi la
+// posizione finale dal proprio punto di vista, alternando massimizzazione
+// (turni della propria squadra) e minimizzazione (turni avversari) come in
+// un normale minimax — così una mossa che sembra ottima ma regala
+// un'occasione facile all'avversario due mosse dopo viene penalizzata.
+const BOT_LOOKAHEAD_PLIES = 3; // 1 = solo la mossa propria (comportamento precedente)
+const BOT_LOOKAHEAD_BEAM = 4;  // quante mosse "papabili" esplorare per ogni turno successivo
+
+// Clona l'intero stato necessario per proseguire la simulazione oltre una
+// singola mossa (a differenza di botSimulate, che clona solo pedine/lapped
+// per un controllo "usa e getta" e azzera le mani).
+function botCloneStateForSearch(state) {
+  return {
+    pawns: clonePawns(state.pawns),
+    lapped: state.lapped ? JSON.parse(JSON.stringify(state.lapped)) : {},
+    hands: {
+      red: state.hands.red.slice(),
+      green: state.hands.green.slice(),
+      yellow: state.hands.yellow.slice(),
+      blue: state.hands.blue.slice(),
+    },
+    turnColor: state.turnColor,
+    log: [],
+    lastSwap: null,
+    lastCapture: null,
+    phase: "playing",
+    winnerTeam: null,
+  };
+}
+
+// Elenca le coppie (carta, mossa) disponibili per `seat` (che muove le
+// pedine di `active`), ciascuna con un punteggio immediato (1 ply) per
+// `forTeam`, ordinate dalla migliore. Serve sia alla scelta reale del bot
+// sia, durante il lookahead, a indovinare in fretta cosa farebbe
+// probabilmente un altro giocatore, senza esplorare a fondo anche il suo
+// turno (terrebbe conto solo delle `BOT_LOOKAHEAD_BEAM` mosse più
+// promettenti per lui).
+function botRankedCandidates(state, active, seat, forTeam) {
+  const hand = state.hands[seat];
+  const out = [];
+  for (const card of hand) {
+    for (const move of botCandidatesForCard(state, active, card)) {
+      let score = botScoreMove(state, active, card, move, forTeam);
+      // Anche per prevedere la mossa di un compagno o di un avversario:
+      // presumiamo che pure loro preferiscano tenersi Jack/7 quando non
+      // servono subito, invece di giocarli a caso.
+      const holdPenalty = BOT_HOLD_PENALTY[rankOf(card)];
+      if (holdPenalty && !botMoveIsTactical(state, active, card, move)) score -= holdPenalty;
+      out.push({ card, move, score });
+    }
+  }
+  out.sort((a, b) => b.score - a.score);
+  return out;
+}
+
+// Valuta la board risultante dopo `plies` ulteriori turni simulati a
+// partire da `clone` (il cui turnColor deve ancora giocare), dal punto di
+// vista di `botTeam`. Foglia di ricerca: nessun ply rimasto, partita finita,
+// o mano esaurita (a quel punto le carte del giro successivo sono ignote,
+// quindi non ha senso continuare a simulare).
+function botLeafValue(clone, botTeam) {
+  const base = botEvaluateBoard(clone.pawns, clone.lapped, botTeam);
+  if (clone.winnerTeam === botTeam) return base + 100000;
+  if (clone.winnerTeam) return base - 100000;
+  return base;
+}
+
+function botLookaheadValue(state, botTeam, plies) {
+  if (plies <= 0 || state.phase === "finished") return botLeafValue(state, botTeam);
+  const seat = state.turnColor;
+  if (!seat || !state.hands[seat]) return botLeafValue(state, botTeam);
+
+  const active = activeColorFor(state, seat);
+  if (!active) {
+    // La squadra di questo turno è già tutta a casa (partita quasi vinta):
+    // il turno passa senza giocare una carta, non conta come una vera mossa
+    // ai fini del conteggio dei ply.
+    const clone = botCloneStateForSearch(state);
+    advanceTurn(clone);
+    if (clone.turnColor === seat || COLORS.every((c) => clone.hands[c].length === 0)) {
+      return botLeafValue(state, botTeam);
+    }
+    return botLookaheadValue(clone, botTeam, plies - 1);
+  }
+
+  const seatTeam = TEAM_OF[seat];
+  const ranked = botRankedCandidates(state, active, seat, seatTeam);
+  if (ranked.length === 0) {
+    // Nessuna mossa legale per nessuna carta: si brucia la meno utile e si
+    // passa, senza spendere un ply "vero" di ricerca.
+    const clone = botCloneStateForSearch(state);
+    burnOneCard(clone, seat, botCardToGiveAway(state, seat));
+    if (COLORS.every((c) => clone.hands[c].length === 0)) return botLeafValue(state, botTeam);
+    advanceTurn(clone);
+    return botLookaheadValue(clone, botTeam, plies - 1);
+  }
+
+  const beam = ranked.slice(0, BOT_LOOKAHEAD_BEAM);
+  const maximizing = seatTeam === botTeam; // il proprio turno (o del compagno): massimizza; l'avversario minimizza
+  let bestValue = maximizing ? -Infinity : Infinity;
+  for (const cand of beam) {
+    const clone = botCloneStateForSearch(state);
+    applyMove(clone, active, cand.card, cand.move);
+    checkWin(clone);
+    let value;
+    if (clone.phase === "finished" || COLORS.every((c) => clone.hands[c].length === 0)) {
+      value = botLeafValue(clone, botTeam);
+    } else {
+      advanceTurn(clone);
+      value = botLookaheadValue(clone, botTeam, plies - 1);
+    }
+    if (maximizing ? value > bestValue : value < bestValue) bestValue = value;
+  }
+  return bestValue;
+}
+
+// Valuta una mossa candidata del bot con l'intero orizzonte di ricerca
+// (la sostituta "profonda" di botScoreMove per la decisione reale).
+function botScoreMoveDeep(state, active, card, move, botTeam) {
+  const clone = botCloneStateForSearch(state);
+  applyMove(clone, active, card, move);
+  checkWin(clone);
+  if (clone.phase === "finished") return botLeafValue(clone, botTeam);
+  if (COLORS.every((c) => clone.hands[c].length === 0)) return botLeafValue(clone, botTeam);
+  advanceTurn(clone);
+  return botLookaheadValue(clone, botTeam, BOT_LOOKAHEAD_PLIES - 1);
+}
+
 // Punteggio della posizione risultante dal punto di vista della squadra
 // `forTeam`: quanta strada hanno fatto le proprie pedine (molto di più se
 // sono già in casa) meno quella delle avversarie, con una penalità per ogni
@@ -4320,6 +4673,14 @@ function botEvaluateBoard(pawns, lapped, forTeam) {
           if (opos === -1 || opos >= 1000) continue;
           const dist = (pos - opos + 64) % 64; // passi che servirebbero all'avversario per arrivarci
           if (dist >= 1 && dist <= 10) score -= (11 - dist) * 1.5;
+          // Simmetrico: quanti passi servirebbero A NOI per raggiungere
+          // QUESTO avversario. Prima non c'era nessun premio per restare in
+          // posizione di minaccia (solo una penalità per essere minacciati),
+          // quindi il bot correva sempre subito in casa appena poteva. Un
+          // piccolo bonus qui gli dà un motivo reale per restare fuori un
+          // altro giro quando può tenere sotto tiro una pedina avversaria.
+          const distToThem = (opos - pos + 64) % 64;
+          if (distToThem >= 1 && distToThem <= 10) score += (11 - distToThem) * 0.9;
         }
       }
     }
@@ -4745,6 +5106,18 @@ async function onCardClick(card, evt) {
     return;
   }
   if (opt.type === "seven") {
+    // Con una sola pedina in gioco l'unica distribuzione possibile è "tutti
+    // e 7 i passi su quella pedina": non c'è nessuna vera scelta da fare
+    // (il fatto stesso che "seven" sia un'opzione legale qui lo garantisce,
+    // dato che è l'unica combinazione che somma a 7 con un solo termine),
+    // quindi si gioca direttamente senza mostrare lo splitter.
+    const inPlay = currentState.pawns[active]
+      .map((p, i) => i)
+      .filter((i) => currentState.pawns[active][i] !== -1);
+    if (inPlay.length === 1) {
+      await playMove(active, card, { type: "seven", distribution: [{ pawnIndex: inPlay[0], steps: 7 }] });
+      return;
+    }
     openSevenSplitter(active, card);
     return;
   }
