@@ -126,6 +126,10 @@ h1 { font-size: 1.4rem; margin: 0 0 4px; color: var(--ink); }
 }
 .bot-btn:hover { background: rgba(255,255,255,0.6); }
 .bot-btn-remove { color: #a13a2f; border-color: #e0b3a8; }
+/* Due pulsanti affiancati (Normale/Difficile) al posto di uno solo, quando
+   il posto va assegnato al computer — vedi botCell/renderStartControls. */
+.bot-btn-row { display: flex; gap: 4px; }
+.bot-btn-row .bot-btn { flex: 1; padding: 5px 3px; }
 
 /* Pulsanti "assegna al computer" per i posti ancora liberi, mostrati nella
    sala d'attesa (dopo essere entrati) invece che solo nella lobby iniziale. */
@@ -371,6 +375,39 @@ button.danger:active {
 .swatch-blue { background: var(--blue); }
 .you-badge { color: #7a6a55; font-weight: 400; }
 
+.last-card-line {
+  display: flex; align-items: center; gap: 7px;
+  padding: 6px 12px; margin: -4px 0 10px;
+  font-size: 0.78rem; color: #6b5b42;
+  background: linear-gradient(180deg, rgba(255,255,255,0.55), rgba(255,255,255,0.18));
+  border: 1px solid rgba(138,122,90,0.35);
+  border-radius: 10px;
+}
+.last-card-text { flex-shrink: 0; }
+.mini-card {
+  position: relative;
+  width: 24px; height: 32px; flex-shrink: 0;
+  border-radius: 4px;
+  border: 1px solid #8a7a5a;
+  background: linear-gradient(180deg, #fffefb, #f4ecd8);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3), 0 1px 0 rgba(255,255,255,0.8) inset;
+  display: inline-block;
+}
+.mini-card.suit-red { color: #c81e3f; }
+.mini-card.suit-black { color: #16110c; }
+.mini-card-rank {
+  position: absolute; top: 1px; left: 2px;
+  font-size: 0.55rem; font-weight: 800; line-height: 1;
+}
+.mini-card.mini-card-burned {
+  filter: grayscale(0.7);
+  opacity: 0.75;
+}
+.mini-card-burn-badge {
+  position: absolute; bottom: -5px; right: -5px;
+  font-size: 0.6rem;
+}
+
 .status-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -393,6 +430,16 @@ button.danger:active {
    di andare a capo in modo incoerente tra un box e l'altro a seconda che
    sia presente o no l'icona del mazziere accanto. */
 .status-name { font-weight: 600; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.status-offline-warning {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #a13a2f;
+  background: rgba(161,58,47,0.1);
+  border-radius: 6px;
+  padding: 1px 5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 .mini-pawns { width: 62px; height: 14px; flex-shrink: 0; }
 .dealer-icon { width: 18px; height: 18px; flex-shrink: 0; }
 
@@ -1439,6 +1486,12 @@ function newGameState(playersByColor, roomMode) {
     hands,
     pawns,
     pendingExchange: {},
+    playedThisCycle: [],
+    // Contatore vittorie per squadra IN QUESTA STANZA — a differenza del
+    // resto dello stato, resetForNewGame (il pulsante "Nuova partita" sulla
+    // schermata di vittoria) non lo tocca: è lo storico della stanza, non
+    // della singola partita.
+    roomStats: { wins: { A: 0, B: 0 } },
     chat: [],
     log: [],
     winnerTeam: null,
@@ -1458,6 +1511,8 @@ function normalizeState(state) {
   if (!state.pawns) state.pawns = {};
   if (!state.players) state.players = {};
   if (!state.pendingExchange) state.pendingExchange = {};
+  if (!Array.isArray(state.playedThisCycle)) state.playedThisCycle = [];
+  if (!state.roomStats || !state.roomStats.wins) state.roomStats = { wins: { A: 0, B: 0 } };
   // Stanze create prima di questa funzionalità non hanno roomMode/draft:
   // trattale come "manual" (comportamento identico a prima).
   if (!state.roomMode) state.roomMode = "manual";
@@ -1509,6 +1564,9 @@ function dealNewHand(state) {
   if (deck.length < 4 * 5) {
     deck = shuffle(buildDeck());
     state.firstHandOfCycle = true;
+    // Nuovo mazzo intero rimescolato: tutte le carte viste finora nel giro
+    // precedente non contano più nulla per il conteggio carte del bot.
+    state.playedThisCycle = [];
     if (state.hasDealtBefore) {
       const order = COLORS;
       const prevIdx = order.indexOf(state.dealerColor);
@@ -2010,6 +2068,8 @@ function applySevenDistribution(state, color, distribution) {
       }
     }
     state.pawns[color][pawnIndex] = dest;
+    if (oldPos < 1000 && dest >= 1000) recordHomeEntry(state, color, pawnIndex, dest);
+    recordLastMove(state, color, pawnIndex, dest);
     setLapped(state, color, pawnIndex, dest < 1000 && dest === BOARD.baseIndex[color]);
     moves.push(`#${pawnIndex + 1} ${posLabel(color, oldPos)}→${posLabel(color, dest)}`);
   }
@@ -2030,6 +2090,34 @@ function recordCapture(state, occ, atPos, byColor) {
   };
   state.pawns[occ.color][occ.pawnIndex] = -1;
   setLapped(state, occ.color, occ.pawnIndex, false);
+}
+
+// Stesso meccanismo di lastCapture/lastSwap/lastHomeEntry, ma per QUALSIASI
+// mossa (anche una semplice, senza mangiata né arrivo in casa) — usato dal
+// pulsante "🔁 Rivedi ultima mossa": quelle altre tre hanno già un flash
+// automatico dedicato, ma una mossa "normale" fin qui non aveva nessun
+// evento tracciato da poter rievocare a comando.
+function recordLastMove(state, color, pawnIndex, toPos) {
+  state.lastMove = {
+    id: (state.lastMove && state.lastMove.id ? state.lastMove.id : 0) + 1,
+    ts: Date.now(),
+    color,
+    pawnIndex,
+    pos: toPos,
+  };
+}
+
+// Stesso meccanismo di lastCapture/lastSwap, ma per l'arrivo in una delle
+// caselle-casa: ogni client può così far scattare un piccolo festeggiamento
+// visivo sulla pedina appena arrivata (vedi flashHomeEntry in renderPawns).
+function recordHomeEntry(state, color, pawnIndex, homePos) {
+  state.lastHomeEntry = {
+    id: (state.lastHomeEntry && state.lastHomeEntry.id ? state.lastHomeEntry.id : 0) + 1,
+    ts: Date.now(),
+    color,
+    pawnIndex,
+    pos: homePos,
+  };
 }
 
 function anyLegalMove(state, color) {
@@ -2061,6 +2149,30 @@ function applyMove(state, color, card, move) {
   const hand = state.hands[handOwner];
   const ci = hand.indexOf(card);
   if (ci !== -1) hand.splice(ci, 1);
+  // Mostrata vicino all'indicatore di turno (vedi renderTurnIndicator) così
+  // si vede a colpo d'occhio quale carta ha appena giocato chiunque altro,
+  // senza dover aprire il registro (ora chiuso di default). handOwner, non
+  // `color`: è la carta di chi ha giocato il turno, anche quando muove le
+  // pedine del compagno. Assente sulle simulazioni interne del bot, stesso
+  // discorso di playedThisCycle qui sopra/sotto.
+  if (state.playedThisCycle) {
+    state.lastCardPlayed = {
+      id: (state.lastCardPlayed && state.lastCardPlayed.id ? state.lastCardPlayed.id : 0) + 1,
+      ts: Date.now(),
+      color: handOwner,
+      card,
+      burned: false,
+    };
+  }
+  // Traccia le carte REALMENTE giocate in questo giro di mazzo (non quelle
+  // scambiate all'inizio mano, che restano semplicemente in un'altra mano)
+  // — usato dal "conteggio carte" del bot per stimare quante carte di un
+  // certo valore siano ancora verosimilmente in circolazione. Assente
+  // (undefined) sulle copie di stato usate dalle simulazioni interne del
+  // bot (botSimulate/botCloneStateForSearch), che quindi non la popolano:
+  // giusto così, quelle sono mosse ipotetiche, non mosse reali della
+  // partita.
+  if (state.playedThisCycle) state.playedThisCycle.push(card);
 
   if (move.type === "enter") {
     const baseIdx = BOARD.baseIndex[color];
@@ -2071,6 +2183,7 @@ function applyMove(state, color, card, move) {
     }
     state.pawns[color][move.pawnIndex] = baseIdx;
     setLapped(state, color, move.pawnIndex, false); // fresh entry, hasn't lapped
+    recordLastMove(state, color, move.pawnIndex, baseIdx);
     state.log.push(`${cn(color)} #${move.pawnIndex + 1} entra in gioco con ${cardLog(card)} (sulla base).`);
     return;
   }
@@ -2087,6 +2200,12 @@ function applyMove(state, color, card, move) {
       }
     }
     state.pawns[color][move.pawnIndex] = dest;
+    recordLastMove(state, color, move.pawnIndex, dest);
+    // Festeggia solo il vero INGRESSO in casa (dal percorso esterno), non
+    // uno spostamento tra due caselle-casa già interne (es. casa#1→casa#3
+    // con un'altra carta) — quello non è un "arrivo", la pedina era già a
+    // casa.
+    if (oldPos < 1000 && dest >= 1000) recordHomeEntry(state, color, move.pawnIndex, dest);
     // Landing exactly back on one's own base cell only means "completed a
     // full forward lap, ready to turn into home next" when this move was a
     // FORWARD one (the "4" card moves backward and can coincidentally land
@@ -2143,6 +2262,7 @@ function applyMove(state, color, card, move) {
 }
 
 function checkWin(state) {
+  if (state.winnerTeam) return; // già decisa: non ricontare una vittoria già registrata
   for (const team of ["A", "B"]) {
     const teamColors = COLORS.filter((c) => TEAM_OF[c] === team);
     const allHome = teamColors.every((c) => state.pawns[c].every((p) => p >= 1000));
@@ -2150,6 +2270,7 @@ function checkWin(state) {
       state.winnerTeam = team;
       state.phase = "finished";
       state.log.push(`La coppia ${TEAM_LABEL[team]} vince la partita!`);
+      if (state.roomStats && state.roomStats.wins) state.roomStats.wins[team]++;
     }
   }
 }
@@ -2167,6 +2288,9 @@ function resetForNewGame(state) {
   state.winnerTeam = null;
   state.lastSwap = null;
   state.lastCapture = null;
+  state.lastHomeEntry = null;
+  state.lastMove = null;
+  state.lastCardPlayed = null;
   state.hasDealtBefore = false;
   state.firstHandOfCycle = true;
   dealNewHand(state);
@@ -2178,6 +2302,19 @@ function burnOneCard(state, color, card) {
   const hand = state.hands[color];
   const ci = hand.indexOf(card);
   if (ci !== -1) hand.splice(ci, 1);
+  // Vedi il commento su state.playedThisCycle in applyMove: anche una
+  // carta bruciata (nessuna mossa legale) esce di scena fino al prossimo
+  // rimescolamento completo del mazzo.
+  if (state.playedThisCycle) state.playedThisCycle.push(card);
+  if (state.playedThisCycle) {
+    state.lastCardPlayed = {
+      id: (state.lastCardPlayed && state.lastCardPlayed.id ? state.lastCardPlayed.id : 0) + 1,
+      ts: Date.now(),
+      color,
+      card,
+      burned: true,
+    };
+  }
   state.log.push(`${cn(color)} brucia ${cardLog(card)} (nessuna mossa).`);
 }
 
@@ -2243,6 +2380,58 @@ function watchRoom(roomId, callback) {
   roomRef(roomId).on("value", (snap) => {
     callback(normalizeState(snap.val()));
   });
+}
+
+// ---- Presenza online/offline -------------------------------------------
+// Separata da games/<roomId> apposta: onDisconnect scrive direttamente su
+// questo percorso indipendente, senza mai toccare (né farsi toccare da) le
+// transazioni sullo stato di gioco vero e proprio. presence/<roomId>/<color>
+// esiste (true) solo mentre quel giocatore UMANO ha una connessione aperta
+// — Firebase stesso la rimuove in automatico alla disconnessione (chiusura
+// scheda, crash, rete persa), anche se il client non fa in tempo a fare
+// nulla — è la garanzia che dà onDisconnect().
+let presenceState = {};
+let presenceListenerRef = null;
+let myPresenceRef = null;
+let presenceConnListenerAttached = false;
+
+function watchPresence(roomId) {
+  if (presenceListenerRef) { presenceListenerRef.off(); presenceListenerRef = null; }
+  const ref = db.ref("presence/" + roomId);
+  ref.on("value", (snap) => {
+    presenceState = snap.val() || {};
+    if (currentState) renderPlayerStatus(currentState);
+  });
+  presenceListenerRef = ref;
+}
+
+// Segnala che QUESTO client (questa scheda/dispositivo, per il colore che
+// controlla) è online, e prepara la rimozione automatica se la connessione
+// cade — anche senza preavviso (niente evento "onbeforeunload" da gestire
+// a mano, che comunque non scatterebbe per una connessione persa o un
+// crash del browser).
+function setupOwnPresence(roomId, color) {
+  const newRef = db.ref("presence/" + roomId + "/" + color);
+  if (myPresenceRef && myPresenceRef.toString() !== newRef.toString()) {
+    // Stavamo presenziando un'altra stanza/colore (es. "Cambia stanza"):
+    // liberiamo quella voce, altrimenti resterebbe segnata online per
+    // sempre lì (nessuna disconnessione reale è avvenuta per quel path).
+    myPresenceRef.onDisconnect().cancel();
+    myPresenceRef.remove().catch(() => {});
+  }
+  myPresenceRef = newRef;
+  const markOnline = () => {
+    myPresenceRef.onDisconnect().remove();
+    myPresenceRef.set(true);
+  };
+  if (!presenceConnListenerAttached) {
+    presenceConnListenerAttached = true;
+    db.ref(".info/connected").on("value", (snap) => {
+      if (snap.val() === true) markOnline();
+    });
+  } else {
+    markOnline();
+  }
 }
 
 function writeState(roomId, state) {
@@ -2678,7 +2867,83 @@ function buildPawnGroup(color, pawnIndex, capR) {
 // Remembers, per pawn, the position it was last actually drawn at — so a
 // new renderPawns() call can tell which pawns moved and animate them
 // stepping through the board instead of teleporting straight there.
-const _pawnAnimState = { positions: {}, els: {}, lastSwapId: null, lastCaptureId: null };
+const _pawnAnimState = { positions: {}, els: {}, lastSwapId: null, lastCaptureId: null, lastHomeEntryId: null };
+// Piccolo festeggiamento dorato ("stelline" che si allargano e svaniscono)
+// quando una pedina arriva in una delle 4 caselle-casa — finora l'unico
+// feedback per un evento così importante era il testo nel registro, mentre
+// una mangiata o uno scambio col Jack avevano già un flash dedicato.
+function flashHomeEntry(svg, board, color, homeIdx) {
+  const p = board.homePaths[color][homeIdx];
+  if (!p) return;
+  const ns = "http://www.w3.org/2000/svg";
+  const g = document.createElementNS(ns, "g");
+  g.setAttribute("class", "home-entry-flash");
+  const R = board.cellRadiusMm;
+
+  const ring = ns_el("circle", { cx: p.x, cy: p.y, r: R * 0.7, fill: "none", stroke: "#D9B65C", "stroke-width": 4.5, opacity: 0.95 });
+  g.appendChild(ring);
+
+  const sparkCount = 6;
+  for (let i = 0; i < sparkCount; i++) {
+    const ang = ((2 * Math.PI) / sparkCount) * i - Math.PI / 2;
+    const dist = R * 1.5;
+    const star = ns_el("text", {
+      x: p.x + Math.cos(ang) * dist, y: p.y + Math.sin(ang) * dist,
+      "text-anchor": "middle", "dominant-baseline": "middle", "font-size": R * 1.1,
+    });
+    star.textContent = "✨";
+    star.setAttribute("opacity", "0.95");
+    g.appendChild(star);
+  }
+  svg.appendChild(g);
+
+  let step = 0;
+  const steps = 9;
+  const grow = () => {
+    step++;
+    const scale = 1 + step * 0.15;
+    const op = Math.max(0, 1 - step * 0.11);
+    g.setAttribute("transform", `translate(${p.x},${p.y}) scale(${scale}) translate(${-p.x},${-p.y})`);
+    g.setAttribute("opacity", op);
+    if (step < steps) setTimeout(grow, 60);
+    else g.remove();
+  };
+  setTimeout(grow, 20);
+}
+// Pulsante "🔁 Rivedi ultima mossa": un doppio anello che pulsa un paio di
+// volte sulla pedina appena mossa — a differenza di flashCapture/
+// flashJackSwap/flashHomeEntry (automatici, un colpo solo), questo si
+// attiva SOLO su richiesta esplicita, e va bene anche per una mossa
+// "semplice" (nessuna mangiata, nessun arrivo in casa) che altrimenti non
+// avrebbe alcun feedback visivo diverso dal semplice spostamento.
+function flashMoveHighlight(svg, board, color, pos) {
+  if (pos == null || pos < 0) return;
+  const p = pos >= 1000 ? board.homePaths[color][pos - 1000] : board.loopCells[pos];
+  const ns = "http://www.w3.org/2000/svg";
+  const g = document.createElementNS(ns, "g");
+  g.setAttribute("class", "move-highlight-flash");
+  const R = board.cellRadiusMm;
+  const ring = ns_el("circle", { cx: p.x, cy: p.y, r: R * 1.05, fill: "none", stroke: "#ffffff", "stroke-width": 3.5, opacity: 0 });
+  g.appendChild(ring);
+  svg.appendChild(g);
+
+  let step = 0;
+  const pulses = 2;
+  const stepsPerPulse = 10;
+  const totalSteps = pulses * stepsPerPulse;
+  const tick = () => {
+    step++;
+    const phase = (step % stepsPerPulse) / stepsPerPulse; // 0→1 dentro ogni pulsazione
+    const scale = 1 + phase * 0.35;
+    const op = 0.85 * (1 - phase);
+    ring.setAttribute("r", R * 1.05 * scale);
+    ring.setAttribute("opacity", op);
+    if (step < totalSteps) setTimeout(tick, 45);
+    else g.remove();
+  };
+  setTimeout(tick, 20);
+}
+
 // Briefly bursts a small colored ring at the spot where a pawn was just
 // captured — a quick "poof" so a capture is obvious to everyone, not just
 // the player who made it.
@@ -2747,6 +3012,7 @@ function resetPawnAnimState() {
   _pawnAnimState.els = {};
   _pawnAnimState.lastSwapId = null; // null = "unknown yet", avoids replaying an old swap on (re)join
   _pawnAnimState.lastCaptureId = null;
+  _pawnAnimState.lastHomeEntryId = null;
 }
 
 // Briefly highlights a Jack swap: a dashed gold arc between the two cells
@@ -2867,7 +3133,7 @@ function cellForColor(board, color, pos) {
   return board.loopCells[pos];
 }
 
-function renderPawns(svg, board, pawns, lastSwap, lastCapture) {
+function renderPawns(svg, board, pawns, lastSwap, lastCapture, lastHomeEntry) {
   const ns = "http://www.w3.org/2000/svg";
   const R = board.cellRadiusMm;
   const capR = R - 1;
@@ -2891,6 +3157,13 @@ function renderPawns(svg, board, pawns, lastSwap, lastCapture) {
     if (ageMs >= 0 && ageMs < 4000) {
       freshCapture = true;
       flashCapture(svg, board, lastCapture.color, lastCapture.atPos);
+    }
+  }
+  if (lastHomeEntry && lastHomeEntry.id && lastHomeEntry.id !== _pawnAnimState.lastHomeEntryId) {
+    _pawnAnimState.lastHomeEntryId = lastHomeEntry.id;
+    const ageMs = Date.now() - (lastHomeEntry.ts || 0);
+    if (ageMs >= 0 && ageMs < 4000) {
+      flashHomeEntry(svg, board, lastHomeEntry.color, lastHomeEntry.pos - 1000);
     }
   }
 
@@ -2978,7 +3251,7 @@ function renderPawns(svg, board, pawns, lastSwap, lastCapture) {
 // Bumped by hand each time a new build is produced — shown in the lobby so
 // it's obvious at a glance whether you're on the latest version, instead
 // of guessing from a stale browser tab or cache.
-const APP_VERSION = "v3.6";
+const APP_VERSION = "v3.7";
 
 let myColor = null;
 let myRoomId = null;
@@ -3376,16 +3649,18 @@ function renderLobbyColorSection(roomId, existingPlayers) {
     const taken = existingPlayers && existingPlayers[c];
     if (!taken) {
       return el(
-        "button",
-        { class: "bot-btn", onclick: () => assignBotToColor(roomId, c, () => {}) },
-        "🤖 Assegna al computer"
+        "div",
+        { class: "bot-btn-row" },
+        el("button", { class: "bot-btn", onclick: () => assignBotToColor(roomId, c, () => {}, "easy") }, "🤖 Normale"),
+        el("button", { class: "bot-btn", onclick: () => assignBotToColor(roomId, c, () => {}, "hard") }, "🤖 Difficile")
       );
     }
     if (taken.isBot) {
+      const lv = taken.botLevel === "easy" ? "normale" : "difficile";
       return el(
         "button",
         { class: "bot-btn bot-btn-remove", onclick: () => removeBotFromColor(roomId, c, () => {}) },
-        "🤖 Libera questo posto"
+        `🤖 Libera questo posto (${lv})`
       );
     }
     return "";
@@ -3551,20 +3826,21 @@ async function joinManualRoom(roomId) {
 // watchRoom/onStateChange è già in ascolto e si aggiorna da solo — basta
 // passare un no-op per evitare di essere rispediti per errore alla
 // schermata di scelta colore/nome.
-async function assignBotToColor(roomId, color, onDone) {
+async function assignBotToColor(roomId, color, onDone, botLevel) {
   unlockAudio();
+  const level = botLevel === "easy" ? "easy" : "hard"; // default storico: "difficile" (comportamento di sempre)
   try {
     const ref = roomRef(roomId);
     const snap = await ref.get();
     if (!snap.exists()) {
       const players = {};
-      players[color] = { name: "Bot " + colorLabel(color), token: "BOT-" + color, isBot: true };
+      players[color] = { name: "Bot " + colorLabel(color), token: "BOT-" + color, isBot: true, botLevel: level };
       const state = newGameState(players, "manual");
       await writeState(roomId, state);
     } else {
       await updateState(roomId, (state) => {
         if (state.players[color]) throw new Error("questo colore è già stato preso");
-        state.players[color] = { name: "Bot " + colorLabel(color), token: "BOT-" + color, isBot: true };
+        state.players[color] = { name: "Bot " + colorLabel(color), token: "BOT-" + color, isBot: true, botLevel: level };
       });
     }
   } catch (e) {
@@ -4040,6 +4316,10 @@ function renderGameShell() {
         el("span", {}, "Sei: ", swatchDot(myColor), myName + " (" + colorLabel(myColor) + ")" +
           " · squadra " + TEAM_LABEL[TEAM_OF[myColor]]),
       ),
+      el("div", { style: "display:flex; justify-content:flex-end; gap:8px; margin-bottom:6px;" },
+        el("button", { class: "sound-test-btn", onclick: replayLastMove }, "🔁 Rivedi ultima mossa"),
+        el("button", { class: "sound-test-btn", onclick: openRulesPanel }, "📖 Regole"),
+      ),
       el("div", { id: "conn-banner" }),
       el("div", { id: "dealer-draw-wrap" }),
       el("div", { id: "board-wrap" }),
@@ -4055,6 +4335,8 @@ function renderGameShell() {
   );
   boardSvg = buildBoardSVG($("#board-wrap"), BOARD);
   watchConnection();
+  watchPresence(myRoomId);
+  setupOwnPresence(myRoomId, myColor);
 }
 
 function watchConnection() {
@@ -4414,6 +4696,61 @@ function ranksThatEnterHomeFor(state, color) {
   return found;
 }
 
+// ---- Il bot commenta in chat -------------------------------------------
+// Qualche battuta contestuale sugli eventi salienti (mangiata, entrata in
+// casa, fine partita), così il bot non resta completamente muto per tutta
+// la partita. Non commenta OGNI singolo evento — solo a volte (le
+// probabilità sotto), come farebbe una persona che non sta al computer a
+// narrare ogni mossa.
+const BOT_CHAT_CAPTURE = [
+  "Ops, si torna alla base! 😄",
+  "Presa! Scusa eh 😅",
+  "Non dovevi restare lì fermo.",
+  "Mangiata! Avanti il prossimo.",
+  "Capita anche ai migliori 😉",
+];
+const BOT_CHAT_HOME = [
+  "Una pedina a casa, le altre arrivano!",
+  "Prima al sicuro 🏠",
+  "Casa dolce casa.",
+];
+const BOT_CHAT_WIN = [
+  "Bella partita, complimenti! 🏆",
+  "Vittoria di squadra! 🎉",
+  "GG a tutti, giocata bene!",
+];
+const BOT_CHAT_LOSE = [
+  "Bella partita comunque, ci riproviamo!",
+  "Complimenti, ben giocato da parte vostra!",
+  "GG, alla prossima va meglio.",
+];
+
+function botRandomLine(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+// Chiamata dopo che il bot `seat` ha applicato la propria mossa reale (mai
+// dentro una simulazione): decide se e cosa commentare in base a cosa è
+// appena successo. Se la partita è appena finita, fa parlare TUTTI i bot
+// presenti in tavola (non solo chi ha fatto l'ultima mossa) — sia chi ha
+// vinto sia chi ha perso, ciascuno con la propria battuta.
+function botCommentOnTurn(state, seat, { captured, enteredHome, justWon }) {
+  if (justWon) {
+    for (const c of COLORS) {
+      if (!state.players[c] || !state.players[c].isBot) continue;
+      if (Math.random() >= 0.7) continue; // non tutti parlano sempre, per non intasare la chat
+      const line = TEAM_OF[c] === state.winnerTeam ? botRandomLine(BOT_CHAT_WIN) : botRandomLine(BOT_CHAT_LOSE);
+      postChatMessage(state, c, line);
+    }
+    return;
+  }
+  if (captured && Math.random() < 0.6) {
+    postChatMessage(state, seat, botRandomLine(BOT_CHAT_CAPTURE));
+    return;
+  }
+  if (enteredHome && Math.random() < 0.35) {
+    postChatMessage(state, seat, botRandomLine(BOT_CHAT_HOME));
+  }
+}
+
 async function botPlayTurn() {
   await updateState(myRoomId, (state) => {
     if (state.phase !== "playing") return;
@@ -4421,11 +4758,20 @@ async function botPlayTurn() {
     if (!seat || !state.players[seat] || !state.players[seat].isBot) return;
     const active = activeColorFor(state, seat);
     if (!active) { advanceTurn(state); return; } // non dovrebbe capitare, sicurezza
-    const choice = botChooseCardAndMove(state, active, seat);
+    const level = (state.players[seat] && state.players[seat].botLevel) || "hard";
+    const choice = level === "easy"
+      ? botChooseCardAndMoveEasy(state, active, seat)
+      : botChooseCardAndMove(state, active, seat);
     if (choice.burn) {
       burnOneCard(state, seat, choice.card);
     } else {
+      const prevCaptureId = state.lastCapture ? state.lastCapture.id : 0;
+      const homeBefore = state.pawns[active].filter((p) => p >= 1000).length;
+      const hadWinner = !!state.winnerTeam;
       applyMove(state, active, choice.card, choice.move);
+      const captured = !!(state.lastCapture && state.lastCapture.id !== prevCaptureId && state.lastCapture.by === active);
+      const enteredHome = state.pawns[active].filter((p) => p >= 1000).length > homeBefore;
+      botCommentOnTurn(state, seat, { captured, enteredHome, justWon: !hadWinner && !!state.winnerTeam });
     }
     if (state.phase !== "finished") advanceTurn(state);
   });
@@ -4506,6 +4852,7 @@ function botChooseCardAndMove(state, active, seat) {
       const holdPenalty = BOT_HOLD_PENALTY[rankOf(card)];
       if (holdPenalty && !botMoveIsTactical(state, active, card, move)) score -= holdPenalty;
       score += botCoordinationAdjustment(state, active, seat, card, move);
+      score += botCardCountAdjustment(state, active, seat, card, move);
       score += Math.random() * 0.01;
       if (score > bestScore) {
         bestScore = score;
@@ -4515,6 +4862,33 @@ function botChooseCardAndMove(state, active, seat) {
   }
   if (!best) {
     // nessuna carta ha una mossa legale: se ne brucia una, la meno utile
+    return { burn: true, card: botCardToGiveAway(state, seat) };
+  }
+  return { burn: false, card: best.card, move: best.move };
+}
+
+// Bot "Normale": valuta solo il risultato IMMEDIATO di ogni mossa (nessun
+// lookahead sui turni successivi, nessuna euristica di coordinazione col
+// compagno, nessuna propensione a tenersi Jack/7 per dopo) — più semplice
+// e prevedibile del bot "Difficile" (botChooseCardAndMove), pensato per chi
+// sta imparando le regole. Gioca comunque le mosse legali disponibili e
+// preferisce quelle che migliorano subito la propria posizione (mangiare,
+// entrare in casa, avanzare), solo senza pianificare oltre il turno in
+// corso.
+function botChooseCardAndMoveEasy(state, active, seat) {
+  const hand = state.hands[seat];
+  const botTeam = TEAM_OF[seat];
+  let best = null, bestScore = -Infinity;
+  for (const card of hand) {
+    for (const move of botCandidatesForCard(state, active, card)) {
+      const score = botScoreMove(state, active, card, move, botTeam) + Math.random() * 0.5;
+      if (score > bestScore) {
+        bestScore = score;
+        best = { card, move };
+      }
+    }
+  }
+  if (!best) {
     return { burn: true, card: botCardToGiveAway(state, seat) };
   }
   return { burn: false, card: best.card, move: best.move };
@@ -4533,6 +4907,68 @@ function botSeatCanRescue(state, seat, color, pawnIndex) {
     }
   }
   return false;
+}
+
+// ---- Conteggio carte -------------------------------------------------
+// Quante carte di ogni valore sono ancora "non viste" da `seat`: né nella
+// sua stessa mano (che conosce), né già giocate/bruciate in questo giro di
+// mazzo (state.playedThisCycle — tutti le vedono passare nel registro, è
+// informazione pubblica). Le restanti possono essere nel mazzo ancora da
+// distribuire o nelle mani degli altri tre giocatori — non sappiamo dove
+// esattamente, ma sappiamo quante ce ne sono ancora davvero in giro.
+function botUnseenRankCounts(state, seat) {
+  const counts = { A: 4, "2": 4, "3": 4, "4": 4, "5": 4, "6": 4, "7": 4, "8": 4, "9": 4, "10": 4, J: 4, Q: 4, K: 4 };
+  for (const card of state.hands[seat] || []) {
+    const r = rankOf(card);
+    if (counts[r] > 0) counts[r]--;
+  }
+  for (const card of state.playedThisCycle || []) {
+    const r = rankOf(card);
+    if (counts[r] > 0) counts[r]--;
+  }
+  return counts;
+}
+
+// Corregge la valutazione "a tiro"/"tengo sotto tiro" di botEvaluateBoard,
+// che tratta ogni distanza 1-10 come ugualmente pericolosa/promettente a
+// prescindere da quali carte siano realmente ancora in circolazione. Se
+// delle 4 carte "7" sono già uscite tutte, una pedina a 7 passi da un
+// avversario è più sicura di quanto la valutazione di base assuma; se sono
+// tutte ancora in giro, è più pericolosa. Il correttivo è volutamente
+// piccolo (± metà del peso base) — un affinamento sopra la valutazione
+// esistente, non una sua sostituzione.
+function botCardCountAdjustment(state, active, seat, card, move) {
+  const botTeam = TEAM_OF[seat];
+  const after = botSimulate(state, active, card, move);
+  const counts = botUnseenRankCounts(state, seat);
+  const rankWeight = (d) => {
+    if (d < 2 || d > 10) return null; // nessuna carta numerica copre queste distanze in modo diretto
+    return counts[String(d)] / 4; // 1 = nessuna novità rispetto a un mazzo "vergine", 0 = valore già tutto uscito
+  };
+  let delta = 0;
+  for (const c of COLORS) {
+    for (let i = 0; i < 4; i++) {
+      const pos = after.pawns[c][i];
+      if (pos === -1 || pos >= 1000) continue;
+      for (const oc of COLORS) {
+        if (oc === c) continue;
+        for (let j = 0; j < 4; j++) {
+          const opos = after.pawns[oc][j];
+          if (opos === -1 || opos >= 1000) continue;
+          if (TEAM_OF[c] === botTeam && TEAM_OF[oc] !== botTeam) {
+            // oc (avversario) potrebbe mangiare c (nostra): quanto dista oc da c
+            const w = rankWeight((pos - opos + 64) % 64);
+            if (w != null) delta -= (w - 0.5) * 1.5;
+          } else if (TEAM_OF[c] !== botTeam && TEAM_OF[oc] === botTeam) {
+            // oc (nostra) potrebbe mangiare c (avversaria): quanto dista oc da c
+            const w = rankWeight((opos - pos + 64) % 64);
+            if (w != null) delta += (w - 0.5) * 0.9;
+          }
+        }
+      }
+    }
+  }
+  return delta;
 }
 
 // Coordinazione col compagno: se questa mossa mette al sicuro una pedina del
@@ -4822,7 +5258,7 @@ function onStateChange(state) {
   renderDealerDrawScreen(state);
   renderStartControls(state);
   renderExchangeControls(state);
-  renderPawns(boardSvg, BOARD, state.pawns, state.lastSwap, state.lastCapture);
+  renderPawns(boardSvg, BOARD, state.pawns, state.lastSwap, state.lastCapture, state.lastHomeEntry);
   renderTurnIndicator(state);
   renderPlayerStatus(state);
   renderHand(state);
@@ -4951,9 +5387,10 @@ function renderStartControls(state) {
             { class: "missing-bots-row" },
             missing.map((c) =>
               el(
-                "button",
-                { class: "bot-btn", onclick: () => assignBotToColor(myRoomId, c, () => {}) },
-                `🤖 ${colorLabel(c)} al computer`
+                "div",
+                { class: "bot-btn-row" },
+                el("button", { class: "bot-btn", onclick: () => assignBotToColor(myRoomId, c, () => {}, "easy") }, `🤖 ${colorLabel(c)} normale`),
+                el("button", { class: "bot-btn", onclick: () => assignBotToColor(myRoomId, c, () => {}, "hard") }, `🤖 ${colorLabel(c)} difficile`)
               )
             )
           )
@@ -5038,11 +5475,19 @@ function renderPlayerStatus(state) {
   for (const c of COLORS) {
     const isTurn = state.phase === "playing" && state.turnColor === c;
     const isDealer = state.dealerColor === c;
+    const isBotSeat = state.players[c] && state.players[c].isBot;
+    const isOnline = !!presenceState[c];
     row.appendChild(
       el(
         "div",
         { class: "status-chip" + (isTurn ? " status-chip-active" : "") },
         el("span", { class: "status-name" }, playerName(state, c)),
+        // Nessun indicatore quando tutto è normale (online, o un bot che
+        // per definizione "c'è" sempre) — solo un'icona quando un
+        // giocatore umano risulta davvero disconnesso.
+        !isBotSeat && state.players[c] && !isOnline
+          ? el("span", { class: "status-offline-warning", title: `${colorLabel(c)} non è connesso in questo momento` }, "⚠️ offline")
+          : "",
         isDealer ? dealerIcon() : "",
         miniPawnsRow(state.pawns[c], c)
       )
@@ -5151,6 +5596,39 @@ function renderTurnIndicator(state) {
         : "",
       el("span", { id: "turn-timer", class: "turn-timer" }, formatElapsed(elapsedNow))
     )
+  );
+  // L'ultima carta giocata (da chiunque, non solo dagli avversari) — utile
+  // per non dover aprire il registro (ora chiuso di default) solo per
+  // vedere cos'ha appena giocato un altro giocatore.
+  if (state.lastCardPlayed) {
+    const { color, card, burned } = state.lastCardPlayed;
+    wrap.appendChild(
+      el(
+        "div",
+        { class: "last-card-line" },
+        el("span", { class: "swatch swatch-" + color }),
+        el("span", { class: "last-card-text" },
+          `${playerName(state, color)} ha ${burned ? "bruciato" : "giocato"}:`),
+        miniCardVisual(card, burned)
+      )
+    );
+  }
+}
+
+function miniCardVisual(card, burned) {
+  const [r, s] = card.split("-");
+  const isRed = !!RED_SUITS[s];
+  const icon = suitIconSvg(s, 13);
+  icon.style.position = "absolute";
+  icon.style.left = "50%";
+  icon.style.top = "58%";
+  icon.style.transform = "translate(-50%, -50%)";
+  return el(
+    "span",
+    { class: "mini-card " + (isRed ? "suit-red" : "suit-black") + (burned ? " mini-card-burned" : "") },
+    el("span", { class: "mini-card-rank" }, r),
+    icon,
+    burned ? el("span", { class: "mini-card-burn-badge" }, "🔥") : ""
   );
 }
 
@@ -5288,6 +5766,90 @@ function closePicker() {
   const wrap = $("#picker-wrap");
   wrap.innerHTML = "";
   wrap.className = "";
+}
+
+// ---- Regolamento richiamabile in partita --------------------------------
+// Finora le regole non erano consultabili da nessuna parte una volta
+// entrati in partita — utile soprattutto per chi le dimentica a metà
+// partita. Riusa lo stesso overlay (#picker-wrap) usato per le scelte
+// Jack/7, quindi lo stile è coerente col resto dell'app.
+const RULES_SECTIONS = [
+  {
+    title: "Squadre e obiettivo",
+    body: "Quattro giocatori, due squadre fisse sedute alternate: Rosso + Giallo contro Verde + Blu. Vince la prima squadra che porta TUTTE E 8 le proprie pedine (le 4 di ciascun compagno) nelle rispettive caselle-casa.",
+  },
+  {
+    title: "Le carte e lo scambio iniziale",
+    body: "Si gioca con un mazzo di carte francesi da 52. La prima mano di ogni giro ne dà 5 a testa (poi 4, finché il mazzo non si esaurisce e si rimescola tutto). Prima di iniziare a giocare, ogni giocatore sceglie alla cieca una carta da passare al proprio compagno — nessuno vede cosa riceverà finché tutti e 4 non hanno scelto.",
+  },
+  {
+    title: "Cosa fa ogni carta",
+    body: "A = fa entrare una pedina in gioco (oppure vale 1 casella avanti se le hai già tutte in gioco). K = entra in gioco (oppure vale 13 avanti). Q = 12 avanti. J = scambia di posto due pedine qualsiasi sul percorso, anche avversarie (non quelle protette sulla propria base o già in casa). 7 = si può giocare intero su una pedina o dividerlo tra più pedine proprie. 4 = 4 caselle INDIETRO. Le altre (2,3,5,6,8,9,10) = avanti del valore indicato.",
+  },
+  {
+    title: "Mangiare e casella base",
+    body: "Se atterri esattamente sulla casella di una pedina avversaria, quella torna alla base. Una pedina appena entrata sulla propria base è protetta e non può essere mangiata finché resta lì.",
+  },
+  {
+    title: "Le caselle-casa",
+    body: "Le 4 caselle-casa finali sono private per ogni colore: solo le proprie pedine possono entrarci, e la mossa che ci porta è sempre facoltativa (si può anche scegliere di continuare a girare sul percorso condiviso).",
+  },
+  {
+    title: "Quando sei già tutto a casa",
+    body: "Se tutte le tue 4 pedine sono già in casa, quando tocca a te giochi comunque le tue carte, ma muovi le pedine del tuo compagno al posto delle tue.",
+  },
+  {
+    title: "Nessuna mossa possibile",
+    body: "Se con nessuna carta in mano hai una mossa legale, ne bruci una (a scelta) e il turno passa, senza muovere nulla.",
+  },
+];
+
+// ---- Rivedi ultima mossa -------------------------------------------------
+// Su richiesta esplicita, evidenzia di nuovo l'ultima cosa successa sul
+// tabellone — utile se te la sei persa la prima volta (era già finita
+// quando hai guardato lo schermo). Sceglie il PIÙ RECENTE tra i quattro
+// possibili eventi tracciati (mossa semplice, mangiata, scambio Jack,
+// arrivo in casa) confrontando i rispettivi timestamp, e richiama lo
+// stesso flash che si vede quando l'evento accade dal vivo — qui però
+// scatta a comando, non serve che sia "fresco".
+function replayLastMove() {
+  if (!currentState || !boardSvg) return;
+  const candidates = [currentState.lastMove, currentState.lastCapture, currentState.lastSwap, currentState.lastHomeEntry]
+    .filter((e) => e && e.ts);
+  if (candidates.length === 0) {
+    alert("Non c'è ancora nessuna mossa da rivedere in questa partita.");
+    return;
+  }
+  candidates.sort((a, b) => b.ts - a.ts);
+  const latest = candidates[0];
+  if (latest === currentState.lastSwap) {
+    flashJackSwap(boardSvg, BOARD, latest);
+  } else if (latest === currentState.lastCapture) {
+    flashCapture(boardSvg, BOARD, latest.color, latest.atPos);
+  } else if (latest === currentState.lastHomeEntry) {
+    flashHomeEntry(boardSvg, BOARD, latest.color, latest.pos - 1000);
+  } else {
+    flashMoveHighlight(boardSvg, BOARD, latest.color, latest.pos);
+  }
+}
+
+function openRulesPanel() {
+  openPicker(
+    el(
+      "div",
+      { class: "choice-box" },
+      el("p", { style: "font-weight:700;margin-bottom:8px;" }, "📖 Regolamento"),
+      RULES_SECTIONS.map((s) =>
+        el(
+          "div",
+          { style: "margin-bottom:12px;" },
+          el("p", { style: "font-weight:700;margin-bottom:3px;" }, s.title),
+          el("p", { class: "muted", style: "margin:0;line-height:1.4;" }, s.body)
+        )
+      ),
+      el("button", { class: "secondary", onclick: closePicker }, "Chiudi")
+    )
+  );
 }
 
 function showPawnChoice(active, card, options) {
@@ -5475,7 +6037,12 @@ async function confirmSeven(active, card) {
 // ---------------- Chat ----------------
 
 let chatRenderedCount = -1; // avoid re-rendering (and losing input focus) needlessly
-let chatCollapsed = false;
+// Chiusa di default quando si entra in partita — prima appariva sempre
+// aperta, occupando spazio subito anche a chi non la usa. Restano
+// comunque apribili su richiesta con l'intestazione cliccabile (vedi
+// toggleChatCollapsed) — e il badge dei messaggi non letti sotto avvisa
+// comunque quando arriva qualcosa di nuovo.
+let chatCollapsed = true;
 let chatSeenCount = 0; // messages the user has actually looked at (chat open)
 
 function renderChat(state) {
@@ -5612,7 +6179,9 @@ function displayLogLine(line) {
 
 let logExpanded = false;
 
-let logCollapsed = false;
+// Chiuso di default quando si entra in partita, come la chat — apribile su
+// richiesta cliccando l'intestazione (vedi toggleLogCollapsed).
+let logCollapsed = true;
 
 function renderLog(state) {
   const wrap = $("#log-wrap");
@@ -5698,12 +6267,17 @@ function renderWinBanner(state) {
   if (root.querySelector(".win-banner-backdrop")) return;
   const winners = COLORS.filter((c) => TEAM_OF[c] === state.winnerTeam);
   const names = winners.map((c) => playerName(state, c)).join(" & ");
+  const wins = (state.roomStats && state.roomStats.wins) || { A: 0, B: 0 };
   const banner = el(
     "div",
     { class: "win-banner" },
     el("div", { class: "win-trophy" }, "🏆"),
     el("h2", {}, `${TEAM_LABEL[state.winnerTeam]} ha vinto!`),
     el("p", { class: "win-names" }, names),
+    // Storico di questa stanza — non della singola partita — così si vede
+    // subito chi sta vincendo di più nella serie, non solo nell'ultima.
+    el("p", { class: "muted", style: "margin-top:8px;font-size:0.85rem;" },
+      `In questa stanza: ${TEAM_LABEL.A} ${wins.A} — ${wins.B} ${TEAM_LABEL.B}`),
     el("button", { class: "primary", style: "margin-top:12px;width:auto;padding:10px 20px;", onclick: startNewGame }, "Nuova partita")
   );
   const backdrop = el("div", { class: "win-banner-backdrop" }, banner);
