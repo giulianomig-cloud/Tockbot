@@ -1,0 +1,16 @@
+{
+  "name": "Tock",
+  "short_name": "Tock",
+  "description": "Tock — gioco da tavolo multiplayer a coppie, stile Non t'arrabbiare, con le carte.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#301c3a",
+  "theme_color": "#301c3a",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

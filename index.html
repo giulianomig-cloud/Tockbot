@@ -1,0 +1,5278 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<title>Tock</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#3a2b1c" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Tock" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #3a2b22;
+  --cream: #f7eeda;
+  --panel: #f3e6c9;
+  --panel-border: #e0c98f;
+  --gold: #d9b65c;
+  --gold-deep: #b8912f;
+  --gold-metallic: linear-gradient(135deg, #f6e2a0 0%, #d9b65c 35%, #a97c28 60%, #eecf85 100%);
+  --red: #ff2d55;
+  --green: #00e68a;
+  --yellow: #f2c200;
+  --blue: #00b0ff;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Poppins", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #3a2b1c;
+  background:
+    radial-gradient(circle at 50% -10%, rgba(255,220,160,0.10), transparent 55%),
+    radial-gradient(circle at 50% 0%, #4a3624, #2c2015 70%),
+    radial-gradient(circle at 50% 120%, #000 0%, transparent 60%);
+  color: var(--ink);
+}
+
+#app { max-width: 480px; margin: 0 auto; padding: calc(12px + env(safe-area-inset-top)) 12px 12px; min-height: 100vh; }
+
+h1 { font-size: 1.4rem; margin: 0 0 4px; color: var(--ink); }
+.app-logo { display: flex; flex-direction: column; align-items: center; margin-bottom: 16px; }
+.app-logo h1 { text-align: center; font-size: 2rem; margin: 0; }
+.app-logo-dots { display: flex; justify-content: space-between; margin-bottom: -4px; }
+.app-logo-dots span { border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.25); aspect-ratio: 1 / 1; }
+.app-logo-dots .ld-red { background: var(--red); }
+.app-logo-dots .ld-green { background: var(--green); }
+.app-logo-dots .ld-yellow { background: var(--yellow); }
+.app-logo-dots .ld-blue { background: var(--blue); }
+.sound-test-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.app-meta { font-size: 0.65rem; color: #a89873; letter-spacing: 0.02em; opacity: 0.8; margin: 0; }
+.muted { color: #7a6a55; font-size: 0.9rem; }
+
+.lobby-card, .start-card {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+}
+
+#room-input, #name-input {
+  width: 100%;
+  padding: 12px;
+  font-size: 1rem;
+  border: 2px solid var(--panel-border);
+  border-radius: 10px;
+  margin: 8px 0;
+  background: #fffaf0;
+}
+#room-input { text-transform: uppercase; }
+
+/* Squadre raggruppate visivamente: le due pedine dello stesso team stanno
+   nello stesso riquadro tratteggiato, con un badge "VS" al centro tra i
+   due riquadri — così si capisce subito chi gioca con chi. */
+.teams-grid { display: flex; gap: 22px; margin-bottom: 16px; position: relative; }
+.team-group {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.3);
+  border: 1.5px dashed var(--panel-border);
+}
+.vs-badge {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #4a3624, var(--ink));
+  border: 2px solid var(--gold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.35);
+  z-index: 2;
+}
+.vs-badge span {
+  color: var(--cream);
+  font-weight: 800;
+  font-size: 0.7rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.color-cell { display: flex; flex-direction: column; gap: 5px; }
+.bot-btn {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 5px 6px;
+  border-radius: 8px;
+  border: 1.5px dashed var(--panel-border);
+  background: rgba(255,255,255,0.35);
+  color: #7a6a55;
+  cursor: pointer;
+}
+.bot-btn:hover { background: rgba(255,255,255,0.6); }
+.bot-btn-remove { color: #a13a2f; border-color: #e0b3a8; }
+
+.color-btn {
+  padding: 14px;
+  border-radius: 10px;
+  border: 3px solid transparent;
+  font-weight: 600;
+  color: white;
+  cursor: pointer;
+}
+.color-red { background: var(--red); }
+.color-green { background: var(--green); }
+.color-yellow { background: var(--yellow); color: var(--ink); }
+.color-blue { background: var(--blue); }
+.color-btn.selected { border-color: var(--ink); transform: scale(0.97); }
+.color-btn:disabled { opacity: 0.35; cursor: default; }
+
+/* ---- modalità stanza: manuale / estrazione ---- */
+.mode-choice { display: flex; flex-direction: column; gap: 12px; margin-top: 6px; }
+.mode-btn {
+  padding: 16px 14px;
+  border-radius: 14px;
+  border: 2px solid var(--panel-border);
+  background: rgba(255,255,255,0.4);
+  cursor: pointer;
+  text-align: left;
+}
+.mode-btn:active { border-color: var(--gold); }
+.mode-btn .mt { font-weight: 700; font-size: 0.92rem; margin-bottom: 3px; color: var(--ink); }
+.mode-btn .ms { font-size: 0.78rem; color: #7a6a55; }
+
+/* ---- sala d'attesa (modalità estrazione) ---- */
+.waiting-list { list-style: none; padding: 0; margin: 10px 0; }
+.waiting-list li {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+  background: rgba(255,255,255,0.35); border: 1px solid var(--panel-border);
+  border-radius: 8px; margin-bottom: 6px; font-size: 0.88rem; font-weight: 600;
+}
+.waiting-list li.pending { opacity: 0.55; font-weight: 400; font-style: italic; }
+.wdot { width: 8px; height: 8px; border-radius: 50%; background: var(--gold); flex-shrink: 0; }
+.wdot.off { background: #b9ac8e; }
+
+/* ---- estrazione coppie ---- */
+.player-slot {
+  padding: 11px 6px; border-radius: 10px; font-weight: 700; text-align: center;
+  min-height: 18px; display: flex; align-items: center; justify-content: center;
+  font-size: 0.87rem; background: #fffaf0; border: 1.5px solid var(--panel-border); color: var(--ink);
+}
+.player-slot.spinning { animation: slotShake 0.12s linear infinite; }
+@keyframes slotShake { 0% { transform: translateX(-1px); } 50% { transform: translateX(1px); } 100% { transform: translateX(-1px); } }
+.team-group.ready { border-style: solid; animation: teamReadyGlow 1s ease-in-out infinite; }
+@keyframes teamReadyGlow {
+  0%, 100% { box-shadow: 0 0 6px 1px rgba(217,182,92,0.5); border-color: var(--gold); }
+  50% { box-shadow: 0 0 20px 6px rgba(217,182,92,0.9); border-color: var(--gold); }
+}
+
+/* ---- scelta accoppiata colori / colore personale ---- */
+.pair-choice, .solo-choice { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.solo-choice { flex-direction: row; }
+.pair-btn, .solo-btn {
+  padding: 15px; border-radius: 12px; border: 3px solid transparent; font-weight: 700;
+  font-size: 0.9rem; cursor: pointer; color: white; display: flex; align-items: center;
+  justify-content: center; gap: 8px; text-align: center;
+}
+.solo-btn { flex: 1; }
+.pair-ry { background: linear-gradient(90deg, var(--red), var(--yellow)); }
+.pair-gb { background: linear-gradient(90deg, var(--green), var(--blue)); }
+.dot-sm { width: 11px; height: 11px; border-radius: 50%; display: inline-block; border: 1.5px solid rgba(255,255,255,0.7); flex-shrink: 0; }
+
+/* ---- estrazione mazziere (asso di cuori) ---- */
+.dealer-draw-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 14px 0 6px;
+}
+.dealer-slot {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 12px 6px 16px; border-radius: 12px; min-height: 92px;
+  background: rgba(255,255,255,0.3); border: 1.5px dashed var(--panel-border);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+.dealer-slot-label { font-weight: 700; font-size: 0.82rem; color: var(--ink); }
+.dealer-slot.dealer-winner {
+  border-style: solid; animation: teamReadyGlow 1s ease-in-out infinite;
+}
+.dealer-card-pop { animation: dealerCardPop 0.35s ease-out; }
+@keyframes dealerCardPop {
+  0% { transform: scale(0.4) rotate(-8deg); opacity: 0; }
+  70% { transform: scale(1.08) rotate(2deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+#dealer-draw-banner {
+  text-align: center; margin-top: 14px; background: linear-gradient(180deg, #4a3624, var(--ink));
+  color: var(--cream); border: 1.5px solid var(--gold); border-radius: 999px; padding: 9px 16px;
+  font-size: 0.85rem; font-weight: 700; opacity: 0; transform: translateY(-6px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+#dealer-draw-banner.show { opacity: 1; transform: translateY(0); }
+
+button.primary {
+  width: 100%;
+  padding: 14px;
+  font-size: 1rem;
+  font-weight: 600;
+  background: linear-gradient(180deg, #4a3624, var(--ink));
+  color: var(--cream);
+  border: 1px solid var(--gold);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.08s ease;
+  box-shadow: 0 3px 0 rgba(0,0,0,0.35);
+}
+button.primary:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.35);
+  filter: brightness(0.92);
+}
+button.secondary {
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 2px solid var(--ink);
+  background: #fffaf0;
+  margin: 4px;
+  cursor: pointer;
+  transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.08s ease;
+  box-shadow: 0 3px 0 rgba(0,0,0,0.25);
+}
+button.secondary:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.25);
+  filter: brightness(0.94);
+}
+button.danger {
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: none;
+  background: #c0392b;
+  color: white;
+  margin-top: 8px;
+  cursor: pointer;
+  transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.08s ease;
+  box-shadow: 0 3px 0 rgba(0,0,0,0.35);
+}
+button.danger:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.35);
+  filter: brightness(0.9);
+}
+
+.top-bar {
+  display: flex;
+  gap: 10px;
+  font-size: 0.68rem;
+  color: #d8c9a8;
+  margin-bottom: 8px;
+  white-space: nowrap;
+  overflow-x: auto;
+}
+.top-bar span { flex-shrink: 0; }
+.sound-test-btn {
+  display: inline-block;
+  margin: 0;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  border-radius: 8px;
+  border: 1px solid var(--gold);
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+#board-wrap {
+  margin-bottom: 10px;
+  padding: 9px;
+  border-radius: 18px;
+  background: #6b4a2a;
+  box-shadow: 0 8px 22px rgba(0,0,0,0.5);
+}
+
+.turn-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  margin-bottom: 10px;
+  font-size: 0.95rem;
+}
+.turn-line.my-turn {
+  border: 3px solid var(--gold);
+  animation: turnGlow 1.1s ease-in-out infinite;
+}
+@keyframes turnGlow {
+  0%, 100% { box-shadow: 0 0 6px 1px rgba(217,182,92,0.55); background: var(--panel); }
+  50% { box-shadow: 0 0 28px 8px rgba(217,182,92,0.95); background: #fff3d6; }
+}
+
+.turn-timer {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+  color: #8a7a5a;
+  flex-shrink: 0;
+}
+.swatch { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
+.swatch-red { background: var(--red); }
+.swatch-green { background: var(--green); }
+.swatch-yellow { background: var(--yellow); }
+.swatch-blue { background: var(--blue); }
+.you-badge { color: #7a6a55; font-weight: 400; }
+
+.status-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.status-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  background: var(--panel);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  border: 2px solid var(--panel-border);
+}
+.status-chip-active { border-color: var(--gold); background: #fff3d6; }
+.status-name { font-weight: 600; }
+.mini-pawns { width: 62px; height: 14px; flex-shrink: 0; }
+.dealer-icon { width: 18px; height: 18px; flex-shrink: 0; }
+
+.hand-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.card-btn {
+  min-width: 54px;
+  width: 54px;
+  height: 76px;
+  padding: 4px;
+  border-radius: 6px;
+  border: 1.5px solid #8a7a5a;
+  background: linear-gradient(180deg, #fffefb, #f8f0dc);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.8) inset, 0 0 0 1px rgba(255,255,255,0.55) inset;
+  cursor: pointer;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+.card-btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.8) inset;
+}
+.card-btn.suit-red { color: #c81e3f; }
+.card-btn.suit-black { color: #16110c; }
+.card-btn:disabled { opacity: 0.4; cursor: default; }
+.card-btn.selected { background: var(--gold-metallic); }
+.card-btn.card-burning {
+  pointer-events: none;
+  animation: cardBurn 0.45s ease-in forwards;
+}
+@keyframes cardBurn {
+  0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+  20% { transform: translateY(0) rotate(-6deg); }
+  40% { transform: translateY(0) rotate(6deg); }
+  60% { transform: translateY(0) rotate(-4deg); opacity: 0.85; }
+  100% { transform: translateY(-6px) scale(0.75) rotate(3deg); opacity: 0; }
+}
+
+.card-corner {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0px;
+  font-size: 0.95rem;
+  font-weight: 800;
+  line-height: 0.9;
+}
+.card-corner-tl { top: 4px; left: 4px; }
+.card-corner-br { bottom: 4px; right: 4px; transform: rotate(180deg); }
+
+.choice-box {
+  width: 100%;
+  background: #fff3d6;
+  border: 2px dashed var(--gold);
+  border-radius: 10px;
+  padding: 10px;
+  margin-top: 6px;
+}
+
+.picker-overlay {
+  /* No longer fixed/floating — this keeps it in its normal place in the
+     page (after the board), so it can never cover the board. It's
+     scrolled into view automatically instead (see openPicker in app.js). */
+  border: 2px solid var(--gold);
+  border-radius: 12px;
+  background: var(--panel);
+  padding: 4px;
+  margin-bottom: 10px;
+  animation: pickerFadeIn 0.2s ease-out;
+}
+@keyframes pickerFadeIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.picker-overlay .choice-box {
+  max-height: 46vh;
+  overflow-y: auto;
+  margin-top: 0;
+}
+
+button.secondary.selected {
+  background: var(--gold-metallic);
+  border-color: var(--ink);
+}
+
+.seven-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+}
+.seven-val {
+  min-width: 22px;
+  text-align: center;
+  font-weight: 700;
+}
+
+.teams-hint {
+  margin-top: -6px;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(4px, 2vw, 10px);
+  flex-wrap: nowrap;
+  width: 100%;
+  overflow-x: auto;
+}
+.team-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: clamp(3px, 1vw, 5px);
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  padding: clamp(4px, 1.2vw, 5px) clamp(7px, 2.4vw, 12px);
+  font-size: clamp(0.68rem, 2.6vw, 0.82rem);
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.team-plus { opacity: 0.55; margin: 0 1px; font-weight: 700; }
+.team-pill .swatch { margin: 0 !important; flex-shrink: 0; }
+.vs-label { font-size: clamp(0.62rem, 2vw, 0.72rem); font-weight: 700; color: #a89873; text-transform: uppercase; letter-spacing: 0.05em; flex-shrink: 0; }
+
+.burn-hint {
+  width: 100%;
+  background: #fdeceb;
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 0.9rem;
+}
+
+.log-box {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 0.85rem;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.log-line { padding: 3px 0; border-bottom: 1px solid rgba(58,43,34,0.08); color: #55483a; display: flex; align-items: flex-start; gap: 6px; }
+.log-line:last-child { border-bottom: none; }
+.log-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+.log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: #7a6a55;
+  margin-bottom: 6px;
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  cursor: pointer;
+  user-select: none;
+}
+.log-controls {
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.log-toggle {
+  background: none;
+  border: none;
+  color: var(--gold-deep);
+  font-weight: 700;
+  font-size: 0.78rem;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.chat-box {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+}
+.chat-title {
+  font-weight: 700;
+  margin-bottom: 6px;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+}
+.chat-unread {
+  background: var(--red);
+  color: white;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  padding: 1px 7px;
+  font-weight: 700;
+}
+.chat-messages {
+  max-height: 140px;
+  overflow-y: auto;
+  margin-bottom: 8px;
+}
+.chat-line { padding: 3px 0; font-size: 0.88rem; display: flex; align-items: center; flex-wrap: wrap; }
+.chat-input-row { display: flex; gap: 6px; }
+.chat-input-row input {
+  flex: 1;
+  padding: 10px;
+  border: 2px solid var(--panel-border);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  background: #fffaf0;
+}
+.chat-input-row button.secondary {
+  background: var(--gold-metallic);
+  border-color: var(--gold-deep);
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.win-banner-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+  padding: 20px;
+  animation: winFade 0.25s ease-out;
+}
+.win-banner {
+  background: var(--gold-metallic);
+  color: var(--ink);
+  text-align: center;
+  padding: 28px 22px;
+  border-radius: 16px;
+  font-weight: 700;
+  box-shadow: 0 10px 34px rgba(0,0,0,0.5);
+  animation: winPop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+  max-width: 340px;
+  width: 100%;
+}
+@keyframes winFade { from { opacity: 0; } to { opacity: 1; } }
+.win-trophy { font-size: 2.6rem; line-height: 1; margin-bottom: 4px; }
+.win-banner h2 { margin: 0 0 4px; font-size: 1.3rem; }
+.win-names { margin: 0; font-size: 0.95rem; opacity: 0.85; }
+@keyframes winPop {
+  0% { transform: scale(0.6); opacity: 0; }
+  70% { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+.confetti-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 5000;
+}
+.confetti-piece {
+  position: absolute;
+  top: -20px;
+  animation-name: confettiFall;
+  animation-timing-function: cubic-bezier(0.35, 0, 0.65, 1);
+  animation-fill-mode: forwards;
+}
+@keyframes confettiFall {
+  0% { transform: translate(0, 0) rotate(var(--rot0)); opacity: 1; }
+  100% { transform: translate(var(--drift), 110vh) rotate(calc(var(--rot0) + 540deg)); opacity: 0.9; }
+}
+
+.board-cell { cursor: default; }
+
+.conn-lost {
+  background: #c0392b;
+  color: white;
+  text-align: center;
+  padding: 8px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.a2hs-hint {
+  margin-top: 14px;
+  background: #fff3d6;
+  border: 1px solid var(--gold);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 0.82rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  justify-content: space-between;
+}
+.a2hs-close {
+  background: none;
+  border: none;
+  font-size: 1rem;
+  cursor: pointer;
+  color: #7a6a55;
+  flex-shrink: 0;
+}
+
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" crossorigin="anonymous"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js" crossorigin="anonymous"></script>
+
+<script>
+// Configurazione del progetto Firebase "ttok-21ebe".
+
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyA78jHHQukTeWhfutHPdhfVYu611iP_BQQ",
+  authDomain: "ttok-21ebe.firebaseapp.com",
+  databaseURL: "https://ttok-21ebe-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "ttok-21ebe",
+  storageBucket: "ttok-21ebe.firebasestorage.app",
+  messagingSenderId: "608353375053",
+  appId: "1:608353375053:web:346f8e4589b4d2c631dd04",
+};
+
+
+</script>
+<script>
+// Geometria del tabellone (generata dal design validato 47,2x47,2cm)
+const BOARD = {
+ "boardSizeMm": 472.0,
+ "pitchMm": 42.0,
+ "cellRadiusMm": 16.0,
+ "loopCells": [
+  {
+   "x": 26.0,
+   "y": 26.0,
+   "isBase": true,
+   "baseColor": "red",
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 68.0,
+   "y": 26.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 110.0,
+   "y": 26.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 152.0,
+   "y": 26.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 194.0,
+   "y": 26.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 194.0,
+   "y": 68.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 194.0,
+   "y": 110.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 194.0,
+   "y": 152.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 236.0,
+   "y": 152.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 278.0,
+   "y": 152.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 278.0,
+   "y": 110.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 278.0,
+   "y": 68.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 278.0,
+   "y": 26.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": true,
+   "markerColor": "green"
+  },
+  {
+   "x": 320.0,
+   "y": 26.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 362.0,
+   "y": 26.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 404.0,
+   "y": 26.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 446.0,
+   "y": 26.0,
+   "isBase": true,
+   "baseColor": "green",
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 446.0,
+   "y": 68.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 446.0,
+   "y": 110.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 446.0,
+   "y": 152.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 446.0,
+   "y": 194.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 404.0,
+   "y": 194.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 362.0,
+   "y": 194.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 320.0,
+   "y": 194.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 320.0,
+   "y": 236.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 320.0,
+   "y": 278.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 362.0,
+   "y": 278.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 404.0,
+   "y": 278.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 446.0,
+   "y": 278.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": true,
+   "markerColor": "yellow"
+  },
+  {
+   "x": 446.0,
+   "y": 320.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 446.0,
+   "y": 362.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 446.0,
+   "y": 404.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 446.0,
+   "y": 446.0,
+   "isBase": true,
+   "baseColor": "yellow",
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 404.0,
+   "y": 446.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 362.0,
+   "y": 446.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 320.0,
+   "y": 446.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 278.0,
+   "y": 446.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 278.0,
+   "y": 404.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 278.0,
+   "y": 362.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 278.0,
+   "y": 320.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 236.0,
+   "y": 320.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 194.0,
+   "y": 320.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 194.0,
+   "y": 362.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 194.0,
+   "y": 404.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 194.0,
+   "y": 446.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": true,
+   "markerColor": "blue"
+  },
+  {
+   "x": 152.0,
+   "y": 446.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 110.0,
+   "y": 446.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 68.0,
+   "y": 446.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 26.0,
+   "y": 446.0,
+   "isBase": true,
+   "baseColor": "blue",
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 26.0,
+   "y": 404.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 26.0,
+   "y": 362.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 26.0,
+   "y": 320.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 26.0,
+   "y": 278.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 68.0,
+   "y": 278.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 110.0,
+   "y": 278.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 152.0,
+   "y": 278.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 152.0,
+   "y": 236.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 152.0,
+   "y": 194.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 110.0,
+   "y": 194.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 68.0,
+   "y": 194.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 26.0,
+   "y": 194.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": true,
+   "markerColor": "red"
+  },
+  {
+   "x": 26.0,
+   "y": 152.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 26.0,
+   "y": 110.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  },
+  {
+   "x": 26.0,
+   "y": 68.0,
+   "isBase": false,
+   "baseColor": null,
+   "isMarker": false,
+   "markerColor": null
+  }
+ ],
+ "baseIndex": {
+  "red": 0,
+  "green": 16,
+  "yellow": 32,
+  "blue": 48
+ },
+ "homePaths": {
+  "red": [
+   {
+    "x": 65.59797968000001,
+    "y": 65.59797968000001
+   },
+   {
+    "x": 95.29646444,
+    "y": 95.29646444
+   },
+   {
+    "x": 124.99494920000001,
+    "y": 124.99494920000001
+   },
+   {
+    "x": 154.69343396,
+    "y": 154.69343396
+   }
+  ],
+  "green": [
+   {
+    "x": 406.40202032,
+    "y": 65.59797968000001
+   },
+   {
+    "x": 376.70353556,
+    "y": 95.29646444
+   },
+   {
+    "x": 347.0050508,
+    "y": 124.99494920000001
+   },
+   {
+    "x": 317.30656604,
+    "y": 154.69343396
+   }
+  ],
+  "yellow": [
+   {
+    "x": 406.40202032,
+    "y": 406.40202032
+   },
+   {
+    "x": 376.70353556,
+    "y": 376.70353556
+   },
+   {
+    "x": 347.0050508,
+    "y": 347.0050508
+   },
+   {
+    "x": 317.30656604,
+    "y": 317.30656604
+   }
+  ],
+  "blue": [
+   {
+    "x": 65.59797968000001,
+    "y": 406.40202032
+   },
+   {
+    "x": 95.29646444000002,
+    "y": 376.70353556
+   },
+   {
+    "x": 124.99494920000002,
+    "y": 347.0050508
+   },
+   {
+    "x": 154.69343396,
+    "y": 317.30656604
+   }
+  ]
+ },
+ "order": [
+  "red",
+  "green",
+  "yellow",
+  "blue"
+ ]
+};
+
+</script>
+<script>
+// ============================================================
+// Tock — motore di gioco
+// ============================================================
+
+const COLORS = ["red", "green", "yellow", "blue"];
+const TEAM_OF = { red: "A", yellow: "A", green: "B", blue: "B" };
+const TEAM_LABEL = { A: "Rosso + Giallo", B: "Verde + Blu" };
+const ITALIAN_COLOR = { red: "Rosso", green: "Verde", yellow: "Giallo", blue: "Blu" };
+function cn(color) { return ITALIAN_COLOR[color] || color; }
+const SUIT_SYMBOL = { hearts: "♥", diamonds: "♦", clubs: "♣", spades: "♠" };
+// Card as shown in the log — e.g. "3-clubs" -> "3♣" — instead of the raw
+// internal code, which isn't meaningful to read back.
+function cardLog(card) {
+  const [r, s] = card.split("-");
+  return r + (SUIT_SYMBOL[s] || "");
+}
+const PARTNER_OF = { red: "yellow", yellow: "red", green: "blue", blue: "green" };
+const NEXT_COLOR = { red: "green", green: "yellow", yellow: "blue", blue: "red" };
+
+function buildDeck() {
+  const suits = ["hearts", "diamonds", "clubs", "spades"];
+  const ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
+  const deck = [];
+  for (const s of suits) for (const r of ranks) deck.push(r + "-" + s);
+  return deck;
+}
+
+function shuffle(arr, rng) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor((rng ? rng() : Math.random()) * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function rankOf(card) { return card.split("-")[0]; }
+
+// Numeric movement value of a card for THIS player's current situation.
+// Returns null for cards that are entry-only, or special (J = swap, 7 = split).
+function moveValueOf(card, allPawnsIn) {
+  const r = rankOf(card);
+  if (r === "A") return allPawnsIn ? 1 : null;
+  if (r === "K") return allPawnsIn ? 13 : null;
+  if (r === "Q") return 12;
+  if (r === "J") return null; // special: swap
+  if (r === "4") return -4;
+  return parseInt(r, 10); // 2..10 (7 also handled specially for split/early-capture)
+}
+
+function isEntryCard(card) {
+  const r = rankOf(card);
+  return r === "A" || r === "K";
+}
+function isJack(card) { return rankOf(card) === "J"; }
+function isSeven(card) { return rankOf(card) === "7"; }
+
+// ------------------------------------------------------------
+// Game state shape (stored in Firebase under games/<roomId>):
+// {
+//   phase: "lobby" | "exchanging" | "playing" | "finished",
+//   players: { <uid>: { name, color } },
+//   dealerColor, turnColor,
+//   deck: [cards...], hands: {red:[...],...}, pawns: {red:[p,p,p,p],...},
+//   pendingExchange: { red: card|null, ... }  // only during "exchanging"
+//   log: [...], winnerTeam: null, firstHandOfCycle: bool, hasDealtBefore: bool
+// }
+// pos >= 0  -> index 0..63 on the main loop
+// pos < 0   -> -1 = in base (not in play)
+// pos >= 1000 -> 1000+home-cell-index (0..3)
+// ------------------------------------------------------------
+
+function newGameState(playersByColor, roomMode) {
+  const hands = {}, pawns = {};
+  for (const c of COLORS) {
+    hands[c] = [];
+    pawns[c] = [-1, -1, -1, -1];
+  }
+  return {
+    phase: "lobby",
+    players: playersByColor,
+    // "manual" = ognuno sceglie subito il proprio colore (comportamento
+    // storico); "draw" = si entra con solo il nome e coppie/colori si
+    // decidono con un'estrazione quando la stanza è piena. Vedi il blocco
+    // "Estrazione squadre" più sotto.
+    roomMode: roomMode || "manual",
+    draft: roomMode === "draw"
+      ? { players: {}, order: [], pairDraw: null, pairChoice: null, colorPicks: {} }
+      : null,
+    dealerColor: "red",
+    turnColor: null,
+    deck: [],
+    hands,
+    pawns,
+    pendingExchange: {},
+    chat: [],
+    log: [],
+    winnerTeam: null,
+    firstHandOfCycle: true,
+    hasDealtBefore: false,
+    lastSwap: null,
+    lastCapture: null,
+  };
+}
+
+function normalizeState(state) {
+  if (!state) return state;
+  if (!Array.isArray(state.deck)) state.deck = [];
+  if (!Array.isArray(state.log)) state.log = [];
+  if (!Array.isArray(state.chat)) state.chat = [];
+  if (!state.hands) state.hands = {};
+  if (!state.pawns) state.pawns = {};
+  if (!state.players) state.players = {};
+  if (!state.pendingExchange) state.pendingExchange = {};
+  // Stanze create prima di questa funzionalità non hanno roomMode/draft:
+  // trattale come "manual" (comportamento identico a prima).
+  if (!state.roomMode) state.roomMode = "manual";
+  if (state.roomMode === "draw" && !state.draft) {
+    state.draft = { players: {}, order: [], pairDraw: null, pairChoice: null, colorPicks: {} };
+  }
+  if (state.draft) {
+    if (!state.draft.players) state.draft.players = {};
+    if (!Array.isArray(state.draft.order)) state.draft.order = [];
+    if (!state.draft.colorPicks) state.draft.colorPicks = {};
+  }
+  for (const c of COLORS) {
+    if (!Array.isArray(state.hands[c])) state.hands[c] = [];
+    if (!Array.isArray(state.pawns[c])) state.pawns[c] = [-1, -1, -1, -1];
+  }
+  return state;
+}
+
+// Chat messages are capped so the stored state doesn't grow forever.
+function postChatMessage(state, color, text) {
+  const clean = String(text || "").trim().slice(0, 200);
+  if (!clean) return;
+  state.chat.push({ color, text: clean, ts: Date.now() });
+  if (state.chat.length > 100) state.chat = state.chat.slice(-100);
+}
+
+// Determina il primo mazziere della stanza pescando carte a turno (rosso,
+// verde, giallo, blu, poi di nuovo rosso...) finché non esce l'Asso di
+// Cuori: chi lo pesca dà le carte per primo. Calcolata una volta sola e
+// salvata nello stato, così tutti i client mostrano la stessa identica
+// sequenza durante l'animazione (vedi renderDealerDrawScreen).
+function buildDealerDrawSequence() {
+  const deck = shuffle(buildDeck());
+  const order = COLORS;
+  const sequence = [];
+  for (let i = 0; i < deck.length; i++) {
+    const card = deck[i];
+    sequence.push({ color: order[i % 4], card });
+    if (card === "A-hearts") break;
+  }
+  return { sequence, winnerColor: sequence[sequence.length - 1].color };
+}
+
+// Deal a new hand, then move into the blind card-exchange phase (instead of
+// straight into play) — partners must each submit one card before anyone
+// can start playing.
+function dealNewHand(state) {
+  let deck = state.deck.filter(Boolean);
+  if (deck.length < 4 * 5) {
+    deck = shuffle(buildDeck());
+    state.firstHandOfCycle = true;
+    if (state.hasDealtBefore) {
+      const order = COLORS;
+      const prevIdx = order.indexOf(state.dealerColor);
+      state.dealerColor = order[(prevIdx + 1) % 4];
+    }
+  }
+  state.hasDealtBefore = true;
+  const perPlayer = state.firstHandOfCycle ? 5 : 4;
+  for (const c of COLORS) {
+    state.hands[c] = deck.splice(0, perPlayer);
+  }
+  state.deck = deck;
+  state.firstHandOfCycle = false;
+
+  const order = COLORS;
+  const dIdx = order.indexOf(state.dealerColor);
+  state.turnColor = order[(dIdx + 1) % 4];
+  state.turnStartedAt = Date.now();
+
+  state.phase = "exchanging";
+  state.pendingExchange = { red: null, green: null, yellow: null, blue: null };
+  state.log.push(`Nuova mano distribuita (mazziere: ${cn(state.dealerColor)}). In attesa dello scambio tra compagni.`);
+}
+
+// A player submits one card, face-down, to give to their partner.
+function submitExchangeCard(state, color, card) {
+  if (state.phase !== "exchanging") throw new Error("non è il momento dello scambio");
+  if (state.pendingExchange[color]) throw new Error("hai già scelto la tua carta");
+  const hand = state.hands[color];
+  const ci = hand.indexOf(card);
+  if (ci === -1) throw new Error("carta non trovata in mano");
+  hand.splice(ci, 1);
+  state.pendingExchange[color] = card;
+  state.log.push(`${cn(color)} ha scelto la carta da scambiare.`);
+
+  const allSubmitted = COLORS.every((c) => state.pendingExchange[c]);
+  if (allSubmitted) {
+    for (const c of COLORS) {
+      const received = state.pendingExchange[PARTNER_OF[c]];
+      state.hands[c].push(received);
+    }
+    state.pendingExchange = {};
+    state.phase = "playing";
+    state.turnStartedAt = Date.now();
+    state.log.push("Scambio completato, si comincia a giocare.");
+  }
+}
+
+function allPawnsOnBoard(state, color) {
+  return state.pawns[color].every((p) => p !== -1);
+}
+
+function pawnsInBase(state, color) {
+  return state.pawns[color]
+    .map((p, i) => (p === -1 ? i : -1))
+    .filter((i) => i !== -1);
+}
+
+function stepsFromOwnBase(color, pos, lapped) {
+  const base = BOARD.baseIndex[color];
+  if (pos >= 1000) return null;
+  // A pawn sitting exactly on its own base cell is ambiguous by position
+  // alone: it's either freshly entered (0 steps travelled, needs an almost
+  // full lap to reach home) or it just completed a full forward lap and
+  // landed back on base (already at 64 steps, ready to turn into home on
+  // the very next move). `lapped` — read from state.lapped, set true only
+  // when a FORWARD move actually lands a pawn on its own base — resolves
+  // the ambiguity. See hasLapped/setLapped.
+  if (pos === base && lapped) return 64;
+  return (pos - base + 64) % 64;
+}
+
+// Has this pawn, at some earlier point, completed a full forward lap and
+// come to rest exactly on its own base cell? Only meaningful while the
+// pawn is actually sitting there (pos === own base); otherwise irrelevant.
+function hasLapped(state, color, pawnIndex) {
+  return !!(state.lapped && state.lapped[color] && state.lapped[color][pawnIndex]);
+}
+
+function setLapped(state, color, pawnIndex, value) {
+  if (!state.lapped) state.lapped = {};
+  if (!state.lapped[color]) state.lapped[color] = [false, false, false, false];
+  state.lapped[color][pawnIndex] = !!value;
+}
+
+// Pure wraparound on the shared 64-cell loop, ignoring anyone's home
+// stretch entirely. Used to offer "keep going around" as an explicit
+// alternative to turning into one's own home cells (entering home is a
+// choice, never mandatory, per the rules).
+function pathForwardLoopOnly(pos, n) {
+  const steps = [];
+  let cur = pos;
+  for (let i = 0; i < n; i++) {
+    cur = (cur + 1) % 64;
+    steps.push(cur);
+  }
+  return steps;
+}
+
+// Sequence of intermediate positions (exclusive of start, inclusive of end)
+// a pawn crosses moving forward `n` steps, turning into its own home
+// stretch once it reaches/passes its base. Correctly continues within the
+// home stretch if the pawn is already there. Returns null on overshoot
+// past the last home cell (in that case pathForwardLoopOnly is still a
+// valid alternative — see movesForValue).
+function pathForward(color, pos, n, lapped) {
+  const steps = [];
+  const base = BOARD.baseIndex[color];
+  if (pos >= 1000) {
+    const curHomeIdx = pos - 1000;
+    const nextIdx = curHomeIdx + n;
+    if (nextIdx > 3) return null;
+    for (let i = curHomeIdx + 1; i <= nextIdx; i++) steps.push(1000 + i);
+    return steps;
+  }
+  const already = stepsFromOwnBase(color, pos, lapped);
+  for (let i = 1; i <= n; i++) {
+    const travelled = already + i;
+    if (travelled > 64) {
+      const homeIdx = travelled - 64 - 1;
+      if (homeIdx > 3) return null;
+      steps.push(1000 + homeIdx);
+    } else if (travelled === 64) {
+      steps.push(base);
+    } else {
+      steps.push((base + travelled) % 64);
+    }
+  }
+  return steps;
+}
+
+function pathBackward(color, pos, n) {
+  if (pos >= 1000) return null;
+  const steps = [];
+  let cur = pos;
+  for (let i = 0; i < n; i++) {
+    cur = (cur - 1 + 64) % 64;
+    steps.push(cur);
+  }
+  return steps;
+}
+
+function occupantAt(state, pos) {
+  for (const c of COLORS) {
+    const idx = state.pawns[c].indexOf(pos);
+    if (idx !== -1) return { color: c, pawnIndex: idx };
+  }
+  return null;
+}
+
+// Home cells are private to each color — position 1000+N is a completely
+// different physical spot for red than for yellow. So "is this cell
+// occupied" can only be asked meaningfully either on the shared loop
+// (occupantAt, pos < 1000) or within ONE specific color's own home
+// stretch (this helper). Never compare a raw home-cell number across
+// colors — that's how a green pawn in its own casa#3 once made the game
+// think yellow's casa#3 was occupied too.
+function isBlockedAlongPath(state, color, cells) {
+  return cells.some((p) => (p >= 1000 ? homeOccupant(state, color, p - 1000) !== -1 : !!occupantAt(state, p)));
+}
+
+function homeOccupant(state, color, homeIdx) {
+  const pos = 1000 + homeIdx;
+  return state.pawns[color].indexOf(pos); // -1 if none
+}
+
+function allPawnPositions(state) {
+  const out = [];
+  for (const c of COLORS) {
+    state.pawns[c].forEach((pos, idx) => {
+      if (pos !== -1) out.push({ color: c, pawnIndex: idx, pos });
+    });
+  }
+  return out;
+}
+
+// Can this pawn legally end its move on `dest`? (checks the universal
+// capture rule, with the one exception: a protected pawn on its own base
+// can never be captured, so landing exactly on it is illegal.)
+function destinationIsLegal(state, color, dest) {
+  if (dest >= 1000) return homeOccupant(state, color, dest - 1000) === -1;
+  const occ = occupantAt(state, dest);
+  if (!occ) return true;
+  return !isPawnProtected(state, occ.color, occ.pawnIndex);
+}
+
+// Standard (non-7) forward/backward move options for a single card value.
+// Whenever the home-turning path and the "just keep circling the main
+// loop" path lead to different places, BOTH are offered — entering one's
+// own home is always a choice, never mandatory.
+function movesForValue(state, color, value) {
+  const options = [];
+  state.pawns[color].forEach((pos, pawnIndex) => {
+    if (pos === -1) return;
+    if (value > 0) {
+      const addIfLegal = (path) => {
+        if (!path) return;
+        const mid = path.slice(0, -1);
+        if (isBlockedAlongPath(state, color, mid)) return; // can't pass over anyone
+        const dest = path[path.length - 1];
+        if (destinationIsLegal(state, color, dest)) {
+          options.push({ type: "move", pawnIndex, path });
+        }
+      };
+      const homePath = pathForward(color, pos, value, hasLapped(state, color, pawnIndex));
+      addIfLegal(homePath);
+      if (pos < 1000) {
+        const loopPath = pathForwardLoopOnly(pos, value);
+        const homeDest = homePath ? homePath[homePath.length - 1] : null;
+        const loopDest = loopPath[loopPath.length - 1];
+        // only add the loop alternative when it actually differs from (or
+        // replaces, on overshoot) the home-turning path — i.e. this move
+        // genuinely reaches/crosses the pawn's own base.
+        if (homeDest === null || homeDest !== loopDest) addIfLegal(loopPath);
+      }
+    } else {
+      const path = pathBackward(color, pos, -value);
+      if (!path) return;
+      const mid = path.slice(0, -1);
+      const blocked = isBlockedAlongPath(state, color, mid);
+      if (!blocked) {
+        const dest = path[path.length - 1];
+        if (destinationIsLegal(state, color, dest)) options.push({ type: "move", pawnIndex, path });
+      }
+    }
+  });
+  return options;
+}
+
+// Legal move OPTIONS for a card. Each option describes a distinct way to
+// play it: {type:"enter",pawnIndex} | {type:"move",pawnIndex,path} |
+// {type:"jack"} (opens a 2-pawn picker in the UI) |
+// {type:"seven"} (opens the split allocator in the UI, only offered when
+// at least one valid distribution exists).
+function legalMovesForCard(state, color, card) {
+  const options = [];
+  const allIn = allPawnsOnBoard(state, color);
+
+  if (isEntryCard(card) && !allIn) {
+    const inBase = pawnsInBase(state, color);
+    if (inBase.length > 0) options.push({ type: "enter", pawnIndex: inBase[0] });
+  }
+
+  if (isJack(card)) {
+    // pawns already "a casa" (home) don't count as "in gioco" for this
+    // precondition — only pawns actually on the main loop do.
+    const hasOwnPawnOnBoard = state.pawns[color].some((p) => p >= 0 && p < 1000);
+    const targets = jackableTargets(state);
+    if (hasOwnPawnOnBoard && targets.length >= 2) options.push({ type: "jack" });
+    return options; // Jack has no other use
+  }
+
+  if (isSeven(card)) {
+    if (sevenHasAnyDistribution(state, color)) options.push({ type: "seven" });
+    // fall through: a plain 7-on-one-pawn move is just a distribution of
+    // {pawnIndex: 7}, already covered by sevenHasAnyDistribution/apply.
+    return options;
+  }
+
+  const value = moveValueOf(card, allIn);
+  if (value !== null) {
+    options.push(...movesForValue(state, color, value));
+  }
+  return options;
+}
+
+// A pawn sitting on the base cell, never yet moved, cannot be chosen for
+// the Jack swap. We track "never moved" implicitly: a pawn is on its own
+// base index AND got there via entry — we approximate this as "pawn is
+// exactly on its own base cell" (matches the physical-board rule closely
+// enough: once it steps off, it's fair game again).
+function protectedPawnIndex(state, color) {
+  const baseIdx = BOARD.baseIndex[color];
+  const idx = state.pawns[color].indexOf(baseIdx);
+  if (idx === -1) return -1;
+  if (hasLapped(state, color, idx)) return -1; // already completed a lap: not "just entered" anymore
+  return idx;
+}
+
+function isPawnProtected(state, color, pawnIndex) {
+  return protectedPawnIndex(state, color) === pawnIndex;
+}
+
+// ---- Jack: swap any two pawns on the board (not the protected one) ----
+// A pawn resting in a home cell is off-limits for the Jack entirely — a
+// home cell's numeric position (1000+N) means a different physical spot
+// for each color, so swapping one in or out of home can never be made to
+// work consistently across colors. The Jack only ever touches pawns still
+// on the shared main loop.
+function jackableTargets(state) {
+  return allPawnPositions(state).filter(
+    (p) => p.pos < 1000 && !isPawnProtected(state, p.color, p.pawnIndex)
+  );
+}
+
+function applyJackSwap(state, a, b) {
+  const posA = state.pawns[a.color][a.pawnIndex];
+  const posB = state.pawns[b.color][b.pawnIndex];
+  if (posA >= 1000 || posB >= 1000) {
+    throw new Error("il Jack non può coinvolgere una pedina già in casa");
+  }
+  state.pawns[a.color][a.pawnIndex] = posB;
+  state.pawns[b.color][b.pawnIndex] = posA;
+  // a Jack swap is a teleport, not a completed forward lap — reset the
+  // ambiguous "sitting on own base" flag to the safe default either way.
+  setLapped(state, a.color, a.pawnIndex, false);
+  setLapped(state, b.color, b.pawnIndex, false);
+  state.log.push(`scambio (Jack) tra ${cn(a.color)}#${a.pawnIndex + 1} (${posLabel(a.color, posA)}→${posLabel(a.color, posB)}) e ${cn(b.color)}#${b.pawnIndex + 1} (${posLabel(b.color, posB)}→${posLabel(b.color, posA)}).`);
+  // recorded so every client can flash/highlight the swap on the board
+  state.lastSwap = {
+    id: (state.lastSwap && state.lastSwap.id ? state.lastSwap.id : 0) + 1,
+    ts: Date.now(),
+    a: { color: a.color, pawnIndex: a.pawnIndex, from: posA, to: posB },
+    b: { color: b.color, pawnIndex: b.pawnIndex, from: posB, to: posA },
+  };
+}
+
+// ---- 7: split freely across any of your own pawns in play, in whatever
+// amounts you like as long as they sum to 7. Each portion may capture
+// early (stopping before using all its allocated steps if it reaches an
+// enemy). Portions are resolved IN ORDER — the first pawn actually moves
+// before the second one's path is checked, so a pawn can vacate a cell
+// (or step off the base) and let the very next portion use that freed
+// path or open home slot in the same turn. ----
+
+// Walks the full N-step path for one pawn. Unlike every other card, the 7
+// may capture a pawn found ALONG THE WAY (not just at the very last step)
+// and keep going, using its full allotted steps to the very end — it
+// doesn't stop the moment it captures. Blocked entirely by an own pawn, a
+// protected pawn, or an occupied home cell anywhere on the path.
+// Validates one candidate path (capture/blocking rules), or returns null.
+function sevenCheckPath(state, color, path, allowEarlyCapture) {
+  if (!path) return null;
+  for (let i = 0; i < path.length; i++) {
+    const cell = path[i];
+    if (cell >= 1000) {
+      const homeOcc = homeOccupant(state, color, cell - 1000);
+      if (homeOcc !== -1) return null; // home cells are safe, can't land/pass
+      continue;
+    }
+    const occ = occupantAt(state, cell);
+    if (occ) {
+      if (occ.color === color) return null; // own pawn always blocks
+      if (isPawnProtected(state, occ.color, occ.pawnIndex)) return null; // never capturable
+      const isLastStep = i === path.length - 1;
+      if (!isLastStep && !allowEarlyCapture) return null; // blocked mid-path
+      // otherwise: capture this one and keep going toward the full distance
+    }
+  }
+  return path;
+}
+
+function sevenSinglePawnPath(state, color, pos, steps, allowEarlyCapture, lapped) {
+  // Try turning into home first...
+  const homePath = sevenCheckPath(state, color, pathForward(color, pos, steps, lapped), allowEarlyCapture);
+  if (homePath) return homePath;
+  // ...but entering home is never mandatory (same rule as every other
+  // card): if that route is blocked (or doesn't even reach home), a pawn
+  // still on the loop can just keep going around instead. Without this
+  // fallback the 7 had no way to use the "vacate a home slot with part of
+  // the 7, keep the rest circling" workaround the rules describe.
+  if (pos < 1000) {
+    const loopPath = sevenCheckPath(state, color, pathForwardLoopOnly(pos, steps), allowEarlyCapture);
+    if (loopPath) return loopPath;
+  }
+  return null;
+}
+
+function clonePawns(pawns) {
+  const out = {};
+  for (const c of COLORS) out[c] = pawns[c].slice();
+  return out;
+}
+
+// Applies one portion's landing to a (possibly scratch) pawns object —
+// shared by validation (on a scratch copy) and the real application (on
+// the live state), so both follow the exact same step-by-step logic.
+function landSevenPortion(pawnsObj, color, pawnIndex, path) {
+  for (const cell of path) {
+    if (cell >= 1000) continue;
+    for (const c of COLORS) {
+      const idx = pawnsObj[c].indexOf(cell);
+      if (idx !== -1) { pawnsObj[c][idx] = -1; break; }
+    }
+  }
+  const dest = path[path.length - 1];
+  pawnsObj[color][pawnIndex] = dest;
+}
+
+function sevenHasAnyDistribution(state, color) {
+  const inPlay = state.pawns[color].map((p, i) => i).filter((i) => state.pawns[color][i] !== -1);
+  if (inPlay.length === 0) return false;
+  // whole 7 on a single pawn
+  for (const idx of inPlay) {
+    if (sevenValidateDistribution(state, color, [{ pawnIndex: idx, steps: 7 }])) return true;
+  }
+  // any split of 7 into positive parts across 2..N of the in-play pawns
+  function tryAmounts(pawnIndices, remaining, idx, acc) {
+    if (idx === pawnIndices.length - 1) {
+      if (remaining <= 0) return false;
+      const dist = acc.concat([{ pawnIndex: pawnIndices[idx], steps: remaining }]);
+      return !!sevenValidateDistribution(state, color, dist);
+    }
+    for (let s = 1; s < remaining; s++) {
+      const dist = acc.concat([{ pawnIndex: pawnIndices[idx], steps: s }]);
+      if (tryAmounts(pawnIndices, remaining - s, idx + 1, dist)) return true;
+    }
+    return false;
+  }
+  for (let size = 2; size <= inPlay.length; size++) {
+    for (const combo of kSubsets(inPlay, size)) {
+      if (tryAmounts(combo, 7, 0, [])) return true;
+    }
+  }
+  return false;
+}
+
+function kSubsets(arr, k) {
+  const out = [];
+  function rec(start, chosen) {
+    if (chosen.length === k) { out.push(chosen.slice()); return; }
+    for (let i = start; i < arr.length; i++) {
+      chosen.push(arr[i]);
+      rec(i + 1, chosen);
+      chosen.pop();
+    }
+  }
+  rec(0, []);
+  return out;
+}
+
+function permutations(arr) {
+  if (arr.length <= 1) return [arr];
+  const out = [];
+  for (let i = 0; i < arr.length; i++) {
+    const rest = arr.slice(0, i).concat(arr.slice(i + 1));
+    for (const p of permutations(rest)) out.push([arr[i]].concat(p));
+  }
+  return out;
+}
+
+// Validates a distribution — [{pawnIndex, steps}, ...] summing to 7 — by
+// trying every ORDER the given portions could be resolved in (since which
+// pawn moves first can matter: it may vacate a cell or step off the base
+// for the next one). The player only picks how many steps each pawn
+// gets; the engine finds a working sequence if one exists.
+function sevenValidateDistribution(state, color, distribution) {
+  const ordered = distribution.filter((d) => d.steps > 0);
+  const total = ordered.reduce((s, d) => s + d.steps, 0);
+  if (total !== 7) return null;
+  if (ordered.length === 0) return null;
+
+  for (const perm of permutations(ordered)) {
+    const scratch = clonePawns(state.pawns);
+    const result = {};
+    const order = [];
+    let ok = true;
+    for (const { pawnIndex, steps } of perm) {
+      const pos = scratch[color][pawnIndex];
+      if (pos === undefined || pos === -1) { ok = false; break; }
+      const path = sevenSinglePawnPath({ pawns: scratch }, color, pos, steps, true, hasLapped(state, color, pawnIndex));
+      if (!path) { ok = false; break; }
+      landSevenPortion(scratch, color, pawnIndex, path);
+      result[pawnIndex] = path;
+      order.push(pawnIndex);
+    }
+    if (ok) {
+      result.__order = order;
+      return result;
+    }
+  }
+  return null;
+}
+
+function applySevenDistribution(state, color, distribution) {
+  const paths = sevenValidateDistribution(state, color, distribution);
+  if (!paths) throw new Error("distribuzione del 7 non valida");
+  const order = paths.__order;
+  const moves = [];
+  for (const pawnIndex of order) {
+    const path = paths[pawnIndex];
+    const dest = path[path.length - 1];
+    const oldPos = state.pawns[color][pawnIndex];
+    // capture EVERY pawn found anywhere along this portion's path, not
+    // just at the final resting cell — the 7 keeps going after eating.
+    for (const cell of path) {
+      if (cell >= 1000) continue;
+      const occ = occupantAt(state, cell);
+      if (occ) {
+        recordCapture(state, occ, cell, color);
+        state.log.push(`${cn(color)} mangia ${cn(occ.color)} con parte del 7.`);
+      }
+    }
+    state.pawns[color][pawnIndex] = dest;
+    setLapped(state, color, pawnIndex, dest < 1000 && dest === BOARD.baseIndex[color]);
+    moves.push(`#${pawnIndex + 1} ${posLabel(color, oldPos)}→${posLabel(color, dest)}`);
+  }
+  state.log.push(`${cn(color)} gioca il 7 (${moves.join("; ")}).`);
+  checkWin(state);
+}
+
+// Records the last capture so every client can flash it on the board —
+// same mechanism as lastSwap for the Jack.
+function recordCapture(state, occ, atPos, byColor) {
+  state.lastCapture = {
+    id: (state.lastCapture && state.lastCapture.id ? state.lastCapture.id : 0) + 1,
+    ts: Date.now(),
+    color: occ.color,
+    pawnIndex: occ.pawnIndex,
+    atPos,
+    by: byColor || null,
+  };
+  state.pawns[occ.color][occ.pawnIndex] = -1;
+  setLapped(state, occ.color, occ.pawnIndex, false);
+}
+
+function anyLegalMove(state, color) {
+  for (const card of state.hands[color]) {
+    if (legalMovesForCard(state, color, card).length > 0) return true;
+  }
+  return false;
+}
+
+// Human-friendly position label: describes a loop cell as "N caselle
+// prima/dopo la base di <color>" — directly countable on the physical
+// board — instead of a raw internal index nobody can cross-check.
+function posLabel(color, pos) {
+  if (pos === -1) return "base";
+  if (pos >= 1000) return `casa#${pos - 1000 + 1}`;
+  const stepsBefore = (64 - stepsFromOwnBase(color, pos)) % 64; // 0 = on the base itself
+  if (stepsBefore === 0) return `sulla base di ${cn(color)}`;
+  if (stepsBefore <= 32) return `${stepsBefore} caselle prima della base di ${cn(color)}`;
+  return `${64 - stepsBefore} caselle dopo la base di ${cn(color)}`;
+}
+
+function applyMove(state, color, card, move) {
+  // The card always comes out of the CURRENT TURN's own hand — not
+  // necessarily `color`'s hand. Once a player's own 4 pawns are all home,
+  // they spend their turn playing a card from their OWN hand to move
+  // their partner's pawns instead (see activeColorFor); `color` here is
+  // whichever pawns actually move, while the card itself is state.turnColor's.
+  const handOwner = state.turnColor && state.hands[state.turnColor] ? state.turnColor : color;
+  const hand = state.hands[handOwner];
+  const ci = hand.indexOf(card);
+  if (ci !== -1) hand.splice(ci, 1);
+
+  if (move.type === "enter") {
+    const baseIdx = BOARD.baseIndex[color];
+    const occ = occupantAt(state, baseIdx);
+    if (occ) {
+      recordCapture(state, occ, baseIdx, color);
+      state.log.push(`${cn(occ.color)} mangiata sulla base da ${cn(color)} che entra.`);
+    }
+    state.pawns[color][move.pawnIndex] = baseIdx;
+    setLapped(state, color, move.pawnIndex, false); // fresh entry, hasn't lapped
+    state.log.push(`${cn(color)} #${move.pawnIndex + 1} entra in gioco con ${cardLog(card)} (sulla base).`);
+    return;
+  }
+
+  if (move.type === "move") {
+    const oldPos = state.pawns[color][move.pawnIndex];
+    const wasLapped = hasLapped(state, color, move.pawnIndex);
+    const dest = move.path[move.path.length - 1];
+    if (dest < 1000) {
+      const occ = occupantAt(state, dest);
+      if (occ) {
+        recordCapture(state, occ, dest, color);
+        state.log.push(`${cn(color)} mangia ${cn(occ.color)} con ${cardLog(card)}.`);
+      }
+    }
+    state.pawns[color][move.pawnIndex] = dest;
+    // Landing exactly back on one's own base cell only means "completed a
+    // full forward lap, ready to turn into home next" when this move was a
+    // FORWARD one (the "4" card moves backward and can coincidentally land
+    // on base too, but that's not a completed lap).
+    {
+      const allInNow = allPawnsOnBoard(state, color);
+      const cardValue = moveValueOf(card, allInNow);
+      const movedForward = cardValue === null || cardValue > 0; // seven/etc fall elsewhere; move-type cards are never null here
+      setLapped(state, color, move.pawnIndex, dest < 1000 && dest === BOARD.baseIndex[color] && movedForward);
+    }
+    state.log.push(`${cn(color)} #${move.pawnIndex + 1} muove con ${cardLog(card)}: ${posLabel(color, oldPos)} → ${posLabel(color, dest)}.`);
+    // if the path swung past this pawn's own base without turning into
+    // its home stretch, say so explicitly — and be precise about WHY:
+    // either the number genuinely didn't match any home cell, or it did
+    // match but the way in was blocked by an occupied cell/home slot
+    // (named exactly, for diagnosing reports without needing screenshots).
+    const baseIdx = BOARD.baseIndex[color];
+    if (dest < 1000 && dest !== baseIdx && move.path.includes(baseIdx)) {
+      const steps = move.path.length;
+      const stepsBefore = stepsFromOwnBase(color, oldPos, wasLapped);
+      const distanceToBase = (64 - stepsBefore) % 64; // how many steps to reach base itself
+      const homePath = pathForward(color, oldPos, steps, wasLapped);
+      let reason;
+      if (!homePath) {
+        reason = `il numero (${steps}) non corrisponde a nessuna delle 4 caselle-casa da questa posizione (a ${distanceToBase} passi dalla base).`;
+      } else {
+        // find exactly what blocked it
+        const mid = homePath.slice(0, -1);
+        const blocker = mid.map((p) => (p < 1000 ? occupantAt(state, p) : null)).find((o) => o);
+        const finalDest = homePath[homePath.length - 1];
+        if (blocker) {
+          reason = `il percorso era bloccato da ${cn(blocker.color)} #${blocker.pawnIndex + 1} sulla casella ${mid.find((p) => p < 1000 && occupantAt(state, p) === blocker)}.`;
+        } else if (finalDest >= 1000 && homeOccupant(state, color, finalDest - 1000) !== -1) {
+          reason = `la casella-casa di destinazione era già occupata da una tua pedina.`;
+        } else {
+          reason = `motivo non identificato (segnalalo: partenza a ${distanceToBase} passi dalla base, numero ${steps}).`;
+        }
+      }
+      state.log.push(`(${cn(color)} #${move.pawnIndex + 1} ha superato la propria base senza entrare in casa — ${reason})`);
+    }
+    checkWin(state);
+    return;
+  }
+
+  if (move.type === "jack") {
+    applyJackSwap(state, move.a, move.b);
+    return;
+  }
+
+  if (move.type === "seven") {
+    applySevenDistribution(state, color, move.distribution);
+    return;
+  }
+}
+
+function checkWin(state) {
+  for (const team of ["A", "B"]) {
+    const teamColors = COLORS.filter((c) => TEAM_OF[c] === team);
+    const allHome = teamColors.every((c) => state.pawns[c].every((p) => p >= 1000));
+    if (allHome) {
+      state.winnerTeam = team;
+      state.phase = "finished";
+      state.log.push(`La coppia ${TEAM_LABEL[team]} vince la partita!`);
+    }
+  }
+}
+
+// Starts a fresh game in the same room, keeping the same players/names —
+// used by the "nuova partita" button on the win screen.
+function resetForNewGame(state) {
+  for (const c of COLORS) {
+    state.pawns[c] = [-1, -1, -1, -1];
+    state.hands[c] = [];
+  }
+  state.deck = [];
+  state.pendingExchange = {};
+  state.log = ["Nuova partita nella stessa stanza."];
+  state.winnerTeam = null;
+  state.lastSwap = null;
+  state.lastCapture = null;
+  state.hasDealtBefore = false;
+  state.firstHandOfCycle = true;
+  dealNewHand(state);
+}
+
+// Burn exactly ONE card (the one the player attempted/chose that had no
+// legal move), then advance the turn — never the whole hand at once.
+function burnOneCard(state, color, card) {
+  const hand = state.hands[color];
+  const ci = hand.indexOf(card);
+  if (ci !== -1) hand.splice(ci, 1);
+  state.log.push(`${cn(color)} brucia ${cardLog(card)} (nessuna mossa).`);
+}
+
+function advanceTurn(state) {
+  const allEmpty = COLORS.every((c) => state.hands[c].length === 0);
+  if (allEmpty) {
+    dealNewHand(state);
+    return;
+  }
+  const order = COLORS;
+  const i = order.indexOf(state.turnColor);
+  let next = order[(i + 1) % 4];
+  // skip a player whose hand is already empty this cycle (waiting for redeal)
+  let guard = 0;
+  while (state.hands[next].length === 0 && guard < 4) {
+    next = order[(order.indexOf(next) + 1) % 4];
+    guard++;
+  }
+  state.turnColor = next;
+  state.turnStartedAt = Date.now();
+}
+
+function activeColorFor(state, seatColor) {
+  const mine = state.pawns[seatColor];
+  const allHome = mine.every((p) => p >= 1000);
+  if (!allHome) return seatColor;
+  const partner = PARTNER_OF[seatColor];
+  const partnerHome = state.pawns[partner].every((p) => p >= 1000);
+  return partnerHome ? null : partner;
+}
+
+if (typeof module !== "undefined") {
+  module.exports = {
+    COLORS, TEAM_OF, TEAM_LABEL, PARTNER_OF, NEXT_COLOR,
+    buildDeck, shuffle, rankOf, moveValueOf, isEntryCard, isJack, isSeven,
+    newGameState, normalizeState, dealNewHand, submitExchangeCard, postChatMessage,
+    allPawnsOnBoard, pawnsInBase, stepsFromOwnBase, pathForward, pathBackward,
+    occupantAt, homeOccupant, allPawnPositions, isPawnProtected, jackableTargets,
+    legalMovesForCard, sevenHasAnyDistribution, sevenValidateDistribution,
+    anyLegalMove, applyMove, checkWin, resetForNewGame, burnOneCard, advanceTurn, activeColorFor,
+  };
+}
+
+</script>
+<script>
+// ============================================================
+// Wrapper minimale per Firebase Realtime Database.
+// Riempi firebase-config.js con le tue chiavi (vedi README).
+// ============================================================
+
+let app, db;
+
+function initFirebase() {
+  app = firebase.initializeApp(FIREBASE_CONFIG);
+  db = firebase.database();
+}
+
+function roomRef(roomId) {
+  return db.ref("games/" + roomId);
+}
+
+function watchRoom(roomId, callback) {
+  roomRef(roomId).on("value", (snap) => {
+    callback(normalizeState(snap.val()));
+  });
+}
+
+function writeState(roomId, state) {
+  return roomRef(roomId).set(state);
+}
+
+async function updateState(roomId, mutatorFn) {
+  // read-modify-write with a transaction so two players acting at the
+  // same instant don't overwrite each other.
+  const ref = roomRef(roomId);
+  let caughtError = null;
+  const result = await ref
+    .transaction((current) => {
+      if (current === null) return current;
+      try {
+        const copy = normalizeState(JSON.parse(JSON.stringify(current)));
+        mutatorFn(copy);
+        return copy;
+      } catch (e) {
+        caughtError = e;
+        return undefined; // abort this transaction attempt
+      }
+    })
+    .catch((e) => {
+      caughtError = e;
+      return null;
+    });
+  if (caughtError) {
+    console.error("updateState error:", caughtError);
+    throw caughtError;
+  }
+  if (result && result.committed === false) {
+    throw new Error("La mossa non è stata salvata (transazione non completata). Riprova.");
+  }
+  return result;
+}
+
+</script>
+<script>
+// ============================================================
+// Rendering del tabellone (stessa geometria validata: 47,2x47,2cm,
+// 64 caselle, 4 caselle-casa per colore) come SVG scalabile.
+// Stile grafico allineato al tabellone fisico definitivo: sfondo
+// caldo con gradiente, basi con angolo arrotondato, caselle lucide.
+// ============================================================
+
+const BASE_COL = {
+  red: "#FF2D55",
+  green: "#00E68A",
+  yellow: "#F2C200",
+  blue: "#00B0FF",
+};
+const PAWN_RING = "#3A2B22";
+
+function lighten(hex, amt) {
+  hex = hex.replace("#", "");
+  const r = parseInt(hex.substr(0, 2), 16);
+  const g = parseInt(hex.substr(2, 2), 16);
+  const b = parseInt(hex.substr(4, 2), 16);
+  const nr = Math.round(r + (255 - r) * amt);
+  const ng = Math.round(g + (255 - g) * amt);
+  const nb = Math.round(b + (255 - b) * amt);
+  return (
+    "#" +
+    [nr, ng, nb].map((v) => v.toString(16).padStart(2, "0")).join("")
+  );
+}
+function darken(hex, amt) {
+  hex = hex.replace("#", "");
+  const r = parseInt(hex.substr(0, 2), 16);
+  const g = parseInt(hex.substr(2, 2), 16);
+  const b = parseInt(hex.substr(4, 2), 16);
+  const nr = Math.round(r * (1 - amt));
+  const ng = Math.round(g * (1 - amt));
+  const nb = Math.round(b * (1 - amt));
+  return (
+    "#" +
+    [nr, ng, nb].map((v) => v.toString(16).padStart(2, "0")).join("")
+  );
+}
+
+function ns_el(tag, attrs) {
+  const ns = "http://www.w3.org/2000/svg";
+  const e = document.createElementNS(ns, tag);
+  Object.entries(attrs || {}).forEach(([k, v]) => e.setAttribute(k, v));
+  return e;
+}
+
+function buildBoardSVG(containerEl, board) {
+  const S = board.boardSizeMm;
+  const R = board.cellRadiusMm;
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", `0 0 ${S} ${S}`);
+  svg.setAttribute("id", "board-svg");
+  svg.style.width = "100%";
+  svg.style.height = "auto";
+  svg.style.display = "block";
+  svg.style.border = "2px solid #3d2a17";
+  svg.style.boxShadow = "inset 0 0 8px 2px rgba(0,0,0,0.35)";
+
+  // ---- defs: gradients for background, bases, cells ----
+  const defs = ns_el("defs", {});
+  const bg = ns_el("radialGradient", { id: "bg-grad", cx: "40%", cy: "35%", r: "80%" });
+  [["0%", "#F6ECD8"], ["55%", "#EBDBB8"], ["100%", "#DEC79A"]].forEach(([off, col]) => {
+    bg.appendChild(ns_el("stop", { offset: off, "stop-color": col }));
+  });
+  defs.appendChild(bg);
+
+  // Subtle wood-grain texture overlay — fine anisotropic noise streaks,
+  // very low opacity, laid on top of the background gradient.
+  const grain = ns_el("filter", { id: "wood-grain", x: "-5%", y: "-5%", width: "110%", height: "110%" });
+  grain.appendChild(ns_el("feTurbulence", {
+    type: "fractalNoise", baseFrequency: "0.012 0.18", numOctaves: 3, seed: 7, result: "noise",
+  }));
+  grain.appendChild(ns_el("feColorMatrix", { in: "noise", type: "matrix", values: "0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.9 0" }));
+  defs.appendChild(grain);
+
+  for (const color of board.order) {
+    const hex = BASE_COL[color];
+    const g = ns_el("radialGradient", { id: "cell-" + color, cx: "32%", cy: "28%", r: "78%" });
+    g.appendChild(ns_el("stop", { offset: "0%", "stop-color": "#ffffff", "stop-opacity": "0.75" }));
+    g.appendChild(ns_el("stop", { offset: "18%", "stop-color": hex, "stop-opacity": "0.85" }));
+    g.appendChild(ns_el("stop", { offset: "55%", "stop-color": hex }));
+    g.appendChild(ns_el("stop", { offset: "100%", "stop-color": darken(hex, 0.35) }));
+    defs.appendChild(g);
+
+    const gl = ns_el("radialGradient", { id: "light-" + color, cx: "32%", cy: "28%", r: "78%" });
+    // used for the marker ("-4") cell fill — kept a bit lighter than full
+    // saturation just so its small dark cap outline still reads, but no
+    // longer washed out.
+    const lc = lighten(hex, 0.42);
+    gl.appendChild(ns_el("stop", { offset: "0%", "stop-color": "#ffffff", "stop-opacity": "0.7" }));
+    gl.appendChild(ns_el("stop", { offset: "20%", "stop-color": lc, "stop-opacity": "0.85" }));
+    gl.appendChild(ns_el("stop", { offset: "100%", "stop-color": lc }));
+    defs.appendChild(gl);
+
+    const base = ns_el("linearGradient", { id: "base-" + color, x1: "0%", y1: "0%", x2: "100%", y2: "100%" });
+    const baseLight = lighten(hex, 0.2);
+    base.appendChild(ns_el("stop", { offset: "0%", "stop-color": lighten(hex, 0.35) }));
+    base.appendChild(ns_el("stop", { offset: "55%", "stop-color": baseLight }));
+    base.appendChild(ns_el("stop", { offset: "100%", "stop-color": darken(hex, 0.1) }));
+    defs.appendChild(base);
+
+    // soft colored halo drawn behind each pawn so it visually "lifts" off
+    // the board instead of blending into the cream/wood background.
+    const halo = ns_el("radialGradient", { id: "pawn-halo-" + color, cx: "50%", cy: "50%", r: "50%" });
+    halo.appendChild(ns_el("stop", { offset: "0%", "stop-color": hex, "stop-opacity": "0.55" }));
+    halo.appendChild(ns_el("stop", { offset: "60%", "stop-color": hex, "stop-opacity": "0.22" }));
+    halo.appendChild(ns_el("stop", { offset: "100%", "stop-color": hex, "stop-opacity": "0" }));
+    defs.appendChild(halo);
+  }
+  const cream = ns_el("radialGradient", { id: "cell-cream", cx: "32%", cy: "28%", r: "78%" });
+  cream.appendChild(ns_el("stop", { offset: "0%", "stop-color": "#FFFDF6" }));
+  cream.appendChild(ns_el("stop", { offset: "45%", "stop-color": "#FBF4E4" }));
+  cream.appendChild(ns_el("stop", { offset: "100%", "stop-color": "#E9DCBE" }));
+  defs.appendChild(cream);
+
+  // Used only for the plain, walkable loop cells — a recessed "carved
+  // hole in the wood" look (darker center, lighter rim), the opposite of
+  // the glossy raised look used for pawns and special cells, so the two
+  // categories read as different at a glance, not just by tone.
+  // Used for base/marker/home cells — the muted tan tone (matches the
+  // normal glossy look, not the recessed style tried earlier).
+  const plain = ns_el("radialGradient", { id: "cell-plain", cx: "32%", cy: "28%", r: "78%" });
+  plain.appendChild(ns_el("stop", { offset: "0%", "stop-color": "#EFE3C4" }));
+  plain.appendChild(ns_el("stop", { offset: "50%", "stop-color": "#E4D3A9" }));
+  plain.appendChild(ns_el("stop", { offset: "100%", "stop-color": "#CBB585" }));
+  defs.appendChild(plain);
+
+  const capSheen = ns_el("radialGradient", { id: "cap-sheen", cx: "35%", cy: "28%", r: "75%" });
+  capSheen.appendChild(ns_el("stop", { offset: "0%", "stop-color": "#ffffff", "stop-opacity": "0.32" }));
+  capSheen.appendChild(ns_el("stop", { offset: "40%", "stop-color": "#ffffff", "stop-opacity": "0.04" }));
+  capSheen.appendChild(ns_el("stop", { offset: "100%", "stop-color": "#000000", "stop-opacity": "0.28" }));
+  defs.appendChild(capSheen);
+
+  svg.appendChild(defs);
+
+  // ---- background ----
+  svg.appendChild(ns_el("rect", { x: 0, y: 0, width: S, height: S, fill: "url(#bg-grad)" }));
+  svg.appendChild(ns_el("rect", {
+    x: 0, y: 0, width: S, height: S, fill: "#3a2412", opacity: 0.14, filter: "url(#wood-grain)",
+  }));
+
+  function line(x1, y1, x2, y2) {
+    return ns_el("line", {
+      x1, y1, x2, y2,
+      stroke: "#8a6a42", "stroke-width": 2, "stroke-linecap": "round", opacity: 0.75,
+    });
+  }
+
+  // connecting lines along the loop
+  for (let i = 0; i < board.loopCells.length; i++) {
+    const a = board.loopCells[i];
+    const b = board.loopCells[(i + 1) % board.loopCells.length];
+    svg.appendChild(line(a.x, a.y, b.x, b.y));
+  }
+  // connecting lines for home paths (base -> home1 -> home2 -> home3 -> home4)
+  for (const color of board.order) {
+    const baseCell = board.loopCells[board.baseIndex[color]];
+    const hp = board.homePaths[color];
+    let prev = baseCell;
+    for (const p of hp) {
+      svg.appendChild(line(prev.x, prev.y, p.x, p.y));
+      prev = p;
+    }
+  }
+
+  // ---- base corner zones (sharp true corner, rounded opposite corner) ----
+  const pitch = board.pitchMm || 42;
+  const zone = pitch * 1.05;
+  const Rc = zone * 0.55;
+  board.loopCells.forEach((cell, idx) => {
+    if (!cell.isBase) return;
+    const color = cell.baseColor;
+    const nearLeft = cell.x < S / 2;
+    const nearTop = cell.y < S / 2;
+    let d;
+    if (nearTop && nearLeft) {
+      const x0 = 4, y0 = 4;
+      d = `M ${x0} ${y0} H ${x0 + zone} V ${y0 + zone - Rc} A ${Rc} ${Rc} 0 0 1 ${x0 + zone - Rc},${y0 + zone} H ${x0} Z`;
+    } else if (nearTop && !nearLeft) {
+      const x0 = S - 4 - zone, y0 = 4;
+      d = `M ${x0 + zone} ${y0} V ${y0 + zone} H ${x0 + Rc} A ${Rc} ${Rc} 0 0 1 ${x0},${y0 + zone - Rc} V ${y0} Z`;
+    } else if (!nearTop && !nearLeft) {
+      const x0 = S - 4 - zone, y0 = S - 4 - zone;
+      d = `M ${x0 + zone} ${y0 + zone} H ${x0} V ${y0 + Rc} A ${Rc} ${Rc} 0 0 1 ${x0 + Rc},${y0} H ${x0 + zone} Z`;
+    } else {
+      const x0 = 4, y0 = S - 4 - zone;
+      d = `M ${x0} ${y0 + zone} V ${y0} H ${x0 + zone - Rc} A ${Rc} ${Rc} 0 0 1 ${x0 + zone},${y0 + Rc} V ${y0 + zone} Z`;
+    }
+    svg.appendChild(ns_el("path", { d, fill: `url(#base-${color})` }));
+    svg.appendChild(ns_el("path", { d, fill: "none", stroke: PAWN_RING, "stroke-width": 1, opacity: 0.35 }));
+  });
+
+  // Plain, walkable loop cells: a recessed "hole carved into the wood"
+  // — darker toward the center, lighter at the rim — instead of the
+  // glossy raised look used for pawns and special cells.
+  const CELL_BORDER_WIDTH = 3.8; // same thickness for every cell on the board
+
+  // Plain, walkable loop cells: bright white/cream — the default, most
+  // common cell.
+  function cell(cx, cy, r) {
+    const g = ns_el("g", {});
+    g.appendChild(ns_el("circle", { cx, cy, r, fill: "url(#cell-cream)", stroke: lighten("#8a7a5a", 0.35), "stroke-width": CELL_BORDER_WIDTH }));
+    g.appendChild(ns_el("circle", { cx, cy, r: r - CELL_BORDER_WIDTH / 2 - 0.6, fill: "none", stroke: "#140c07", "stroke-width": 1, opacity: 0.55 }));
+    return g;
+  }
+
+  // Base, "-4" marker, and home cells: the muted tan tone plus a bold
+  // colored ring — same size and border thickness as every other cell, so
+  // a real pawn (filled, crowned) is unmistakably different from the
+  // empty slot underneath it.
+  function specialCell(cx, cy, r, colorHex) {
+    const g = ns_el("g", {});
+    g.appendChild(ns_el("circle", { cx, cy, r, fill: "url(#cell-plain)", stroke: lighten(colorHex, 0.35), "stroke-width": CELL_BORDER_WIDTH }));
+    g.appendChild(ns_el("circle", { cx, cy, r: r - CELL_BORDER_WIDTH / 2 - 0.6, fill: "none", stroke: "#140c07", "stroke-width": 1, opacity: 0.55 }));
+    return g;
+  }
+
+  // cells
+  board.loopCells.forEach((c, idx) => {
+    let g;
+    if (c.isBase) g = specialCell(c.x, c.y, R, BASE_COL[c.baseColor]);
+    else if (c.isMarker) g = specialCell(c.x, c.y, R, BASE_COL[c.markerColor]);
+    else g = cell(c.x, c.y, R);
+    g.setAttribute("data-pos", idx);
+    g.setAttribute("class", "board-cell");
+    svg.appendChild(g);
+  });
+
+  // home cells — same white-with-colored-ring treatment, same size as
+  // every other cell on the board (previously smaller/inconsistent).
+  for (const color of board.order) {
+    board.homePaths[color].forEach((p, hIdx) => {
+      const g = specialCell(p.x, p.y, R, BASE_COL[color]);
+      g.setAttribute("data-home", color + ":" + hIdx);
+      g.setAttribute("class", "board-cell");
+      svg.appendChild(g);
+    });
+  }
+
+  containerEl.innerHTML = "";
+  containerEl.appendChild(svg);
+  resetPawnAnimState();
+  return svg;
+}
+
+// A crown-cap silhouette with a smooth wavy (not pointed) crimped edge —
+// same tooth count as a real bottle cap, but rounded scallops instead of
+// sharp triangular points. Built as a closed cubic-bezier path so the
+// waves are gently curved rather than polygonal.
+function capOutlinePath(R, teeth, jag) {
+  teeth = teeth || 20;
+  jag = jag || 0.16;
+  const Ro = R;
+  const Ri = R * (1 - jag);
+  const n = teeth * 2; // one control vertex per tooth peak/valley, as before
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const ang = ((2 * Math.PI) / n) * i - Math.PI / 2;
+    const r = i % 2 === 0 ? Ro : Ri;
+    pts.push([r * Math.cos(ang), r * Math.sin(ang)]);
+  }
+  // Catmull-Rom -> cubic Bezier through the same peak/valley points, so the
+  // silhouette keeps the identical number of bumps but every corner is a
+  // smooth curve instead of a sharp vertex.
+  const k = 1 / 6;
+  let d = `M ${pts[0][0].toFixed(2)} ${pts[0][1].toFixed(2)} `;
+  for (let i = 0; i < n; i++) {
+    const p0 = pts[(i - 1 + n) % n];
+    const p1 = pts[i];
+    const p2 = pts[(i + 1) % n];
+    const p3 = pts[(i + 2) % n];
+    const c1x = p1[0] + (p2[0] - p0[0]) * k;
+    const c1y = p1[1] + (p2[1] - p0[1]) * k;
+    const c2x = p2[0] - (p3[0] - p1[0]) * k;
+    const c2y = p2[1] - (p3[1] - p1[1]) * k;
+    d += `C ${c1x.toFixed(2)} ${c1y.toFixed(2)} ${c2x.toFixed(2)} ${c2y.toFixed(2)} ${p2[0].toFixed(2)} ${p2[1].toFixed(2)} `;
+  }
+  d += "Z";
+  return d;
+}
+
+// Draw one pawn's visual, entirely relative to (0,0) — the caller wraps it
+// in a <g transform="translate(x,y)"> so the whole thing can be repositioned
+// (and animated) just by changing that one transform.
+function pawnIcon(color, r) {
+  const ns = "http://www.w3.org/2000/svg";
+  const g = document.createElementNS(ns, "g");
+  const s = r / 12; // scale factor (icons designed on a ~12-unit radius)
+  const ICON_COL = "#ffffff";
+
+  function path(d, extra) {
+    return ns_el("path", Object.assign({
+      d, fill: "none", stroke: ICON_COL, "stroke-width": 1.6,
+      "stroke-linecap": "round", "stroke-linejoin": "round",
+    }, extra || {}));
+  }
+  function circle(cx2, cy2, rr, extra) {
+    return ns_el("circle", Object.assign({ cx: cx2, cy: cy2, r: rr, fill: "none", stroke: ICON_COL, "stroke-width": 1.6 }, extra || {}));
+  }
+
+  const wrap = ns_el("g", { transform: `scale(${s})`, opacity: 0.95 });
+
+  if (color === "red") {
+    // Anchor
+    wrap.appendChild(circle(0, -7, 2.1, { "stroke-width": 1.5 }));
+    wrap.appendChild(path("M 0 -5 L 0 6"));
+    wrap.appendChild(path("M -4.5 -2 L 4.5 -2"));
+    wrap.appendChild(path("M -6 2 C -6 6.5 -2.5 8.5 0 8.5 C 2.5 8.5 6 6.5 6 2"));
+    wrap.appendChild(path("M -6 2 L -3.6 2"));
+    wrap.appendChild(path("M 6 2 L 3.6 2"));
+  } else if (color === "green") {
+    // Ship's wheel
+    wrap.appendChild(circle(0, 0, 6, {}));
+    wrap.appendChild(circle(0, 0, 1.6, {}));
+    for (let i = 0; i < 6; i++) {
+      const ang = (Math.PI / 3) * i;
+      const x1 = Math.cos(ang) * 1.6, y1 = Math.sin(ang) * 1.6;
+      const x2 = Math.cos(ang) * 7.6, y2 = Math.sin(ang) * 7.6;
+      wrap.appendChild(path(`M ${x1.toFixed(2)} ${y1.toFixed(2)} L ${x2.toFixed(2)} ${y2.toFixed(2)}`));
+    }
+  } else if (color === "yellow") {
+    // Fish
+    wrap.appendChild(path("M -8 0 C -5 -5 4 -5 7 0 C 4 5 -5 5 -8 0 Z"));
+    wrap.appendChild(path("M 7 0 L 10.5 -3 L 10.5 3 Z", { fill: ICON_COL, stroke: "none" }));
+    wrap.appendChild(circle(-4.2, -0.8, 0.9, { fill: "#22140a", stroke: "none" }));
+  } else if (color === "blue") {
+    // Sailboat
+    wrap.appendChild(path("M -0.3 -9 L -0.3 5.5"));
+    wrap.appendChild(path("M 0 -8 C 4.8 -6 5 -0.5 0 2 Z", { fill: ICON_COL, stroke: "none" }));
+    wrap.appendChild(path("M -6.5 6.5 L 6.5 6.5 L 4.3 9.3 L -4.3 9.3 Z", { fill: ICON_COL, stroke: "none" }));
+  }
+  g.appendChild(wrap);
+  return g;
+}
+
+// Build one pawn's full visual (halo, shadow, cap, icon, number badge),
+// relative to (0,0). The returned <g> is meant to be placed inside an
+// outer <g transform="translate(x,y)"> — see renderPawns.
+function buildPawnGroup(color, pawnIndex, capR) {
+  const ns = "http://www.w3.org/2000/svg";
+  const g = document.createElementNS(ns, "g");
+  g.setAttribute("class", "pawn-visual");
+  const outline = capOutlinePath(capR, 20, 0.16);
+  g.appendChild(ns_el("circle", { cx: 0, cy: 0, r: capR * 1.85, fill: `url(#pawn-halo-${color})` }));
+  g.appendChild(ns_el("path", {
+    d: outline, transform: `translate(1.4,2.2)`, fill: "#000000", opacity: 0.45,
+  }));
+  const cap = ns_el("path", { d: outline, fill: BASE_COL[color], stroke: "#140c07", "stroke-width": 2.7 });
+  g.appendChild(cap);
+  g.appendChild(ns_el("circle", { cx: 0, cy: 0, r: capR * 0.8, fill: "none", stroke: "#22140a", "stroke-width": 1, opacity: 0.3 }));
+  g.appendChild(ns_el("path", { d: outline, fill: "url(#cap-sheen)" }));
+  // big, legible number instead of the maritime icon — this is the pawn's
+  // identity at a glance, matching "Pedina #N" everywhere else in the UI.
+  const numText = document.createElementNS(ns, "text");
+  numText.setAttribute("x", 0);
+  numText.setAttribute("y", capR * 0.36);
+  numText.setAttribute("text-anchor", "middle");
+  numText.setAttribute("font-size", capR * 1.35);
+  numText.setAttribute("font-family", "sans-serif");
+  numText.setAttribute("font-weight", "800");
+  numText.setAttribute("fill", "#ffffff");
+  numText.setAttribute("stroke", "#140c07");
+  numText.setAttribute("stroke-width", capR * 0.045);
+  numText.setAttribute("paint-order", "stroke");
+  numText.textContent = String(pawnIndex + 1);
+  g.appendChild(numText);
+  return g;
+}
+
+// Remembers, per pawn, the position it was last actually drawn at — so a
+// new renderPawns() call can tell which pawns moved and animate them
+// stepping through the board instead of teleporting straight there.
+const _pawnAnimState = { positions: {}, els: {}, lastSwapId: null, lastCaptureId: null };
+// Briefly bursts a small colored ring at the spot where a pawn was just
+// captured — a quick "poof" so a capture is obvious to everyone, not just
+// the player who made it.
+function flashCapture(svg, board, color, pos) {
+  if (pos == null || pos < 0) return;
+  const p = pos >= 1000 ? board.homePaths[color][pos - 1000] : board.loopCells[pos];
+  const ns = "http://www.w3.org/2000/svg";
+  const g = document.createElementNS(ns, "g");
+  g.setAttribute("class", "capture-flash");
+
+  // instant bright white pop, for a sharp "impact" moment
+  const pop = ns_el("circle", { cx: p.x, cy: p.y, r: board.cellRadiusMm * 0.9, fill: "#fffdf6", opacity: 0.95 });
+  g.appendChild(pop);
+
+  const ring = ns_el("circle", { cx: p.x, cy: p.y, r: board.cellRadiusMm * 0.75, fill: "none", stroke: BASE_COL[color], "stroke-width": 5.5, opacity: 0.95 });
+  g.appendChild(ring);
+  const rayCount = 8;
+  for (let i = 0; i < rayCount; i++) {
+    const ang = ((2 * Math.PI) / rayCount) * i;
+    const line = ns_el("line", {
+      x1: p.x + Math.cos(ang) * board.cellRadiusMm * 0.8, y1: p.y + Math.sin(ang) * board.cellRadiusMm * 0.8,
+      x2: p.x + Math.cos(ang) * board.cellRadiusMm * 1.7, y2: p.y + Math.sin(ang) * board.cellRadiusMm * 1.7,
+      stroke: BASE_COL[color], "stroke-width": 3.4, "stroke-linecap": "round", opacity: 0.95,
+    });
+    g.appendChild(line);
+  }
+  svg.appendChild(g);
+
+  // the white pop disappears almost immediately, leaving the colored
+  // burst to grow and fade over a longer, clearly visible stretch
+  setTimeout(() => pop.remove(), 90);
+
+  let step = 0;
+  const steps = 10;
+  const grow = () => {
+    step++;
+    const scale = 1 + step * 0.22;
+    const op = Math.max(0, 1 - step * 0.1);
+    g.setAttribute("transform", `translate(${p.x},${p.y}) scale(${scale}) translate(${-p.x},${-p.y})`);
+    g.setAttribute("opacity", op);
+    if (step < steps) setTimeout(grow, 65);
+    else g.remove();
+  };
+  setTimeout(grow, 20);
+}
+
+// Shrinks + fades a captured pawn's element in place before removing it,
+// instead of it just vanishing instantly.
+function animateCaptureOut(el) {
+  let step = 0;
+  const steps = 6;
+  const baseTransform = el.getAttribute("transform") || "";
+  const tick = () => {
+    step++;
+    const scale = Math.max(0, 1 - step / steps);
+    el.setAttribute("transform", `${baseTransform} scale(${scale})`);
+    el.setAttribute("opacity", String(scale));
+    if (step < steps) setTimeout(tick, 45);
+    else el.remove();
+  };
+  tick();
+}
+
+function resetPawnAnimState() {
+  _pawnAnimState.positions = {};
+  _pawnAnimState.els = {};
+  _pawnAnimState.lastSwapId = null; // null = "unknown yet", avoids replaying an old swap on (re)join
+  _pawnAnimState.lastCaptureId = null;
+}
+
+// Briefly highlights a Jack swap: a dashed gold arc between the two cells
+// involved, plus a pulsing ring on each pawn's new spot. Purely decorative,
+// removes itself after ~1.1s.
+function flashJackSwap(svg, board, swapInfo) {
+  const ns = "http://www.w3.org/2000/svg";
+  const g = document.createElementNS(ns, "g");
+  g.setAttribute("class", "jack-flash");
+  const pa = cellForColor(board, swapInfo.a.color, swapInfo.a.to);
+  const pb = cellForColor(board, swapInfo.b.color, swapInfo.b.to);
+  const R = board.cellRadiusMm;
+
+  // a bold gold label at the midpoint, plus growing/fading rings on both
+  // landing spots — timed to appear right as the pawns finish arcing into
+  // place, so the swap reads as unmistakable rather than a quiet snap.
+  const midX = (pa.x + pb.x) / 2, midY = (pa.y + pb.y) / 2;
+  const badge = ns_el("text", {
+    x: midX, y: midY, "text-anchor": "middle", "dominant-baseline": "middle",
+    "font-size": R * 1.1, "font-family": "sans-serif",
+  });
+  badge.textContent = "⇄";
+  badge.setAttribute("fill", "#D9B65C");
+  badge.setAttribute("stroke", "#3A2B22");
+  badge.setAttribute("stroke-width", "1.2");
+  g.appendChild(badge);
+  svg.appendChild(g);
+
+  [pa, pb].forEach((p) => {
+    const ring = ns_el("circle", { cx: p.x, cy: p.y, r: R * 0.6, fill: "none", stroke: "#D9B65C", "stroke-width": 4.5, opacity: 0.95 });
+    svg.appendChild(ring);
+    let step = 0;
+    const steps = 10;
+    const pulse = () => {
+      step++;
+      ring.setAttribute("r", R * (0.6 + step * 0.16));
+      ring.setAttribute("opacity", String(Math.max(0, 0.95 - step * 0.1)));
+      if (step < steps) setTimeout(pulse, 55);
+      else ring.remove();
+    };
+    setTimeout(pulse, 220); // start once the arc motion is mostly done
+  });
+
+  setTimeout(() => g.remove(), 1400);
+}
+
+// Moves a pawn element along a visible arched path from `fromXY` to `toXY`
+// (used for Jack swaps) instead of snapping — this is what actually makes
+// the swap obvious: you see both pawns cross paths.
+function animateSwapArc(el, fromXY, toXY, genToken) {
+  const steps = 10;
+  const durationMs = 26;
+  const midX = (fromXY.x + toXY.x) / 2;
+  const midY = (fromXY.y + toXY.y) / 2 - 34; // arch upward
+  let i = 0;
+  function tick() {
+    if (el.__animGen !== genToken) return;
+    if (i > steps) return;
+    const t = i / steps;
+    const x = (1 - t) * (1 - t) * fromXY.x + 2 * (1 - t) * t * midX + t * t * toXY.x;
+    const y = (1 - t) * (1 - t) * fromXY.y + 2 * (1 - t) * t * midY + t * t * toXY.y;
+    const scale = 1 + Math.sin(Math.PI * t) * 0.22; // slight pop as it arcs
+    el.setAttribute("transform", `translate(${x},${y}) scale(${scale})`);
+    i++;
+    if (i <= steps) setTimeout(tick, durationMs);
+  }
+  tick();
+}
+
+function pathForAnimation(color, oldPos, newPos) {
+  if (oldPos === -1 || newPos === -1 || oldPos === newPos) return null;
+  if (typeof pathForward !== "function") return null; // engine.js not loaded (shouldn't happen)
+  // forward, possibly turning into home (try both "just entered" and
+  // "completed a lap" interpretations of a pawn sitting on its own base —
+  // this is a purely cosmetic reconstruction, so trying both is cheap)
+  for (const lapped of [false, true]) {
+    for (let n = 1; n <= 13; n++) {
+      const p = pathForward(color, oldPos, n, lapped);
+      if (p && p[p.length - 1] === newPos) return p;
+    }
+  }
+  // forward, staying on the loop (wrap past one's own base without entering home)
+  if (oldPos < 1000 && newPos < 1000 && typeof pathForwardLoopOnly === "function") {
+    for (let n = 1; n <= 13; n++) {
+      const p = pathForwardLoopOnly(oldPos, n);
+      if (p[p.length - 1] === newPos) return p;
+    }
+  }
+  // backward (the "4" card)
+  if (oldPos < 1000 && newPos < 1000 && typeof pathBackward === "function") {
+    const p = pathBackward(color, oldPos, 4);
+    if (p && p[p.length - 1] === newPos) return p;
+  }
+  // advancing further within the home stretch
+  if (oldPos >= 1000 && newPos >= 1000 && newPos > oldPos) {
+    const p = [];
+    for (let i = oldPos + 1; i <= newPos; i++) p.push(i);
+    return p;
+  }
+  return null; // couldn't reconstruct (e.g. a Jack swap) — caller will snap instead
+}
+
+function animateAlongPath(el, board, path, color, stepMs, genToken) {
+  let i = 0;
+  function step() {
+    if (el.__animGen !== genToken) return; // a newer move superseded this animation
+    if (i >= path.length) return;
+    const cell = cellForColor(board, color, path[i]);
+    el.setAttribute("transform", `translate(${cell.x},${cell.y})`);
+    i++;
+    if (i < path.length) setTimeout(step, stepMs);
+  }
+  step();
+}
+
+function cellForColor(board, color, pos) {
+  if (pos >= 1000) return board.homePaths[color][pos - 1000];
+  return board.loopCells[pos];
+}
+
+function renderPawns(svg, board, pawns, lastSwap, lastCapture) {
+  const ns = "http://www.w3.org/2000/svg";
+  const R = board.cellRadiusMm;
+  const capR = R - 1;
+  const stepMs = 170;
+
+  let freshSwap = false;
+  if (lastSwap && lastSwap.id && lastSwap.id !== _pawnAnimState.lastSwapId) {
+    _pawnAnimState.lastSwapId = lastSwap.id;
+    // only animate swaps that just happened — never replay an old one that
+    // was already sitting in the game state when this client (re)joined
+    const ageMs = Date.now() - (lastSwap.ts || 0);
+    if (ageMs >= 0 && ageMs < 4000) {
+      freshSwap = true;
+      flashJackSwap(svg, board, lastSwap);
+    }
+  }
+  let freshCapture = false;
+  if (lastCapture && lastCapture.id && lastCapture.id !== _pawnAnimState.lastCaptureId) {
+    _pawnAnimState.lastCaptureId = lastCapture.id;
+    const ageMs = Date.now() - (lastCapture.ts || 0);
+    if (ageMs >= 0 && ageMs < 4000) {
+      freshCapture = true;
+      flashCapture(svg, board, lastCapture.color, lastCapture.atPos);
+    }
+  }
+
+  const seen = new Set();
+
+  for (const color of Object.keys(pawns)) {
+    pawns[color].forEach((pos, pawnIndex) => {
+      const key = color + "-" + pawnIndex;
+      if (pos === -1) {
+        // not on the board any more (captured): shrink+fade it out instead
+        // of just vanishing, then remove.
+        const existing = _pawnAnimState.els[key];
+        if (existing) {
+          delete _pawnAnimState.els[key];
+          if (freshCapture && lastCapture.color === color && lastCapture.pawnIndex === pawnIndex) {
+            animateCaptureOut(existing);
+          } else {
+            existing.remove();
+          }
+        }
+        delete _pawnAnimState.positions[key];
+        return;
+      }
+      seen.add(key);
+      const target = cellForColor(board, color, pos);
+      let outer = _pawnAnimState.els[key];
+      const prevPos = _pawnAnimState.positions[key];
+
+      if (!outer) {
+        // first time this pawn appears (e.g. just entered) — place directly
+        outer = document.createElementNS(ns, "g");
+        outer.setAttribute("class", "pawn");
+        outer.setAttribute("data-color", color);
+        outer.setAttribute("data-pawn-index", pawnIndex);
+        outer.appendChild(buildPawnGroup(color, pawnIndex, capR));
+        outer.setAttribute("transform", `translate(${target.x},${target.y})`);
+        svg.appendChild(outer);
+        _pawnAnimState.els[key] = outer;
+        _pawnAnimState.positions[key] = pos;
+        return;
+      }
+
+      if (prevPos === pos) return; // unchanged, nothing to do
+      _pawnAnimState.positions[key] = pos;
+
+      const gen = (outer.__animGen || 0) + 1;
+      outer.__animGen = gen;
+
+      const isSwapPart = freshSwap && lastSwap && lastSwap.id === _pawnAnimState.lastSwapId &&
+        ((lastSwap.a.color === color && lastSwap.a.pawnIndex === pawnIndex) ||
+         (lastSwap.b.color === color && lastSwap.b.pawnIndex === pawnIndex));
+
+      if (isSwapPart) {
+        const fromXY = cellForColor(board, color, prevPos);
+        animateSwapArc(outer, fromXY, target, gen);
+      } else {
+        const path = pathForAnimation(color, prevPos, pos);
+        if (path && path.length > 0) {
+          animateAlongPath(outer, board, path, color, stepMs, gen);
+        } else {
+          outer.setAttribute("transform", `translate(${target.x},${target.y})`);
+        }
+      }
+    });
+  }
+
+  // clean up any leftover elements for pawns no longer present (shouldn't
+  // normally happen since the -1 branch above already handles it, but keep
+  // this as a safety net e.g. after a full board reset)
+  for (const key of Object.keys(_pawnAnimState.els)) {
+    if (!seen.has(key)) {
+      _pawnAnimState.els[key].remove();
+      delete _pawnAnimState.els[key];
+      delete _pawnAnimState.positions[key];
+    }
+  }
+}
+
+</script>
+<script>
+// ============================================================
+// App principale: lobby, scambio carte, schermata di gioco.
+// ============================================================
+
+// Bumped by hand each time a new build is produced — shown in the lobby so
+// it's obvious at a glance whether you're on the latest version, instead
+// of guessing from a stale browser tab or cache.
+const APP_VERSION = "v3.1";
+
+let myColor = null;
+let myRoomId = null;
+let myName = null;
+let myToken = null; // usato solo nel flusso "estrazione", prima che il colore sia deciso
+let boardSvg = null;
+let currentState = null;
+let sevenAllocation = null; // {pawnIndex: steps} while the 7-splitter is open
+let jackPicked = []; // selected {color,pawnIndex} while the Jack picker is open
+let draftAnimShown = { pairDraw: false }; // evita di rifare l'animazione ad ogni re-render
+// Ogni chiamata a renderPairDrawScreen incrementa questo contatore. Serve a
+// invalidare un'animazione "vecchia" rimasta in esecuzione in background
+// (es. perché nel frattempo è arrivato un altro aggiornamento dalla stanza e
+// lo schermo è stato ridisegnato): senza questo controllo, i suoi timer
+// ritardati potrebbero scrivere per un attimo un nome casuale dello spin
+// sopra ai riquadri già assestati con il nome vero.
+let draftPairRenderToken = 0;
+
+const $ = (sel) => document.querySelector(sel);
+
+function el(tag, props, ...children) {
+  const e = document.createElement(tag);
+  Object.entries(props || {}).forEach(([k, v]) => {
+    if (k === "class") e.className = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (k === "disabled") {
+      if (v) e.setAttribute("disabled", "");
+    } else e.setAttribute(k, v);
+  });
+  children.flat().forEach((c) => {
+    if (typeof c === "string") e.appendChild(document.createTextNode(c));
+    else if (c) e.appendChild(c);
+  });
+  return e;
+}
+
+// ---------------- Lobby ----------------
+//
+// Flusso in due passaggi: prima solo il codice stanza (continueFromRoomCode
+// decide cosa mostrare dopo), poi una schermata diversa a seconda del
+// contesto:
+//  - stanza nuova            -> scelta modalità (manuale / estrazione)
+//  - stanza esistente manuale -> lobby con nome + colore (come sempre)
+//  - stanza esistente estrazione -> solo nome, poi sala d'attesa
+//  - dispositivo già riconosciuto in questa stanza -> va dritto al tabellone
+//
+// La modalità "estrazione" (sorteggio coppie + scelta colori) è descritta
+// più sotto, cercare "Estrazione squadre".
+
+function renderLobby() {
+  const root = $("#app");
+  root.innerHTML = "";
+
+  const roomInput = el("input", {
+    id: "room-input",
+    placeholder: "codice stanza (es. TORVA1)",
+    value: myRoomId || "",
+  });
+
+  root.appendChild(
+    el(
+      "div",
+      { class: "lobby-card" },
+      el("div", { class: "app-logo" },
+        el("div", { class: "app-logo-dots" },
+          el("span", { class: "ld-red" }), el("span", { class: "ld-green" }),
+          el("span", { class: "ld-yellow" }), el("span", { class: "ld-blue" })
+        ),
+        el("h1", {}, "Tock")
+      ),
+      el("p", { class: "muted" }, "Inserisci il codice stanza per creare o entrare in una partita."),
+      roomInput,
+      el("button", { id: "continue-btn", class: "primary", onclick: continueFromRoomCode }, "Continua"),
+      el(
+        "div",
+        { class: "sound-test-row" },
+        el("button", { class: "sound-test-btn", onclick: testSound }, "🔊 Test suono"),
+        el("span", { class: "app-meta" }, `Tock by Mig · ${APP_VERSION} · © 2026 Mig`)
+      ),
+      homeScreenHint()
+    )
+  );
+
+  sizeLogoDotsToTitle();
+}
+
+function sizeLogoDotsToTitle() {
+  const dotsRow = document.querySelector(".app-logo-dots");
+  const title = document.querySelector(".app-logo h1");
+  if (!dotsRow || !title) return;
+  const w = title.offsetWidth;
+  dotsRow.style.width = w + "px";
+  // 4 pallini + 3 spazi (space-between) larghi quanto la scritta "Tock".
+  const d = Math.round(w / 5.2);
+  dotsRow.querySelectorAll("span").forEach((s) => {
+    s.style.width = d + "px";
+    s.style.height = d + "px";
+  });
+}
+
+async function continueFromRoomCode() {
+  unlockAudio();
+  const roomId = $("#room-input").value.trim().toUpperCase();
+  if (!roomId) return alert("Inserisci un codice stanza.");
+  myRoomId = roomId;
+
+  let snap;
+  try {
+    snap = await roomRef(roomId).get();
+  } catch (e) {
+    alert("Non riesco a contattare il server, riprova.");
+    console.error(e);
+    return;
+  }
+
+  if (!snap.exists()) {
+    renderModeChoice(roomId);
+    return;
+  }
+
+  const existing = normalizeState(snap.val());
+
+  // Rientro: se questo dispositivo ha già un colore assegnato in questa
+  // stanza (partita manuale, o estrazione già conclusa), va dritto al
+  // tabellone invece di rifare la lobby o l'estrazione da capo.
+  for (const c of COLORS) {
+    const claimed = existing.players && existing.players[c];
+    if (!claimed || !claimed.token) continue;
+    let savedToken = null;
+    try { savedToken = localStorage.getItem("tock-claim-" + roomId + "-" + c); } catch (e) {}
+    if (savedToken && claimed.token === savedToken) {
+      myColor = c;
+      myName = claimed.name;
+      watchRoom(roomId, onStateChange);
+      renderGameShell();
+      return;
+    }
+  }
+
+  // Se in questa stanza c'è già almeno un colore assegnato (partita
+  // manuale in corso, o estrazione già conclusa) ma il dispositivo non è
+  // stato riconosciuto sopra, potrebbe comunque essere un giocatore che
+  // sta rientrando da un dispositivo diverso — offriglielo prima di
+  // mandarlo dritto alla lobby/estrazione come fosse nuovo.
+  if (existing.players && Object.keys(existing.players).length > 0) {
+    renderNameRecoveryScreen(roomId);
+    return;
+  }
+
+  if (existing.roomMode === "draw") {
+    renderDraftNameScreen(roomId);
+  } else {
+    renderManualLobby(roomId, existing.players || {});
+  }
+}
+
+function renderModeChoice(roomId) {
+  const root = $("#app");
+  root.innerHTML = "";
+  root.appendChild(
+    el(
+      "div",
+      { class: "lobby-card" },
+      el("h1", {}, "Tock"),
+      el("p", { class: "muted" }, `Stanza ${roomId} — sei il primo, scegli come formare le squadre.`),
+      el(
+        "div",
+        { class: "mode-choice" },
+        el(
+          "button",
+          { class: "mode-btn", onclick: () => renderManualLobby(roomId, {}) },
+          el("div", { class: "mt" }, "🎨 Scelgo io i colori"),
+          el("div", { class: "ms" }, "Ogni giocatore entra e sceglie subito il proprio colore, come sempre.")
+        ),
+        el(
+          "button",
+          { class: "mode-btn", onclick: () => renderDraftNameScreen(roomId) },
+          el("div", { class: "mt" }, "🎲 Estrazione a sorte"),
+          el("div", { class: "ms" }, "Si entra con solo il nome; quando siete in 4, coppie e colori si decidono a caso.")
+        )
+      ),
+      el("p", { class: "muted", style: "margin-top:12px; font-size:0.78rem;" },
+        "La modalità scelta vale per tutta la stanza: chi entra dopo la trova già impostata."),
+      el("button", { class: "sound-test-btn", style: "margin-top:6px;", onclick: renderLobby }, "◀ Cambia stanza")
+    )
+  );
+}
+
+// Permette di rientrare in una stanza già avviata da un dispositivo
+// diverso da quello usato la prima volta: basta scrivere esattamente lo
+// stesso nome usato per entrare. Vale sia per la modalità manuale sia per
+// l'estrazione già conclusa (in quel caso non serve nemmeno ricordare il
+// colore assegnato, lo ritrova da solo). Attenzione: il nome è l'unica
+// chiave, quindi due persone con lo stesso nome nella stessa stanza si
+// "ruberebbero" il posto a vicenda — stesso comportamento già esistente
+// in modalità manuale.
+function renderNameRecoveryScreen(roomId) {
+  const root = $("#app");
+  root.innerHTML = "";
+  const nameInput = el("input", { id: "recover-name-input", placeholder: "il tuo nome", value: myName || "" });
+  root.appendChild(
+    el(
+      "div",
+      { class: "lobby-card" },
+      el("h1", {}, "Tock"),
+      el("p", { class: "muted" },
+        `Stanza ${roomId} — c'è già una partita in corso qui. Se sei tu (da un altro dispositivo), scrivi esattamente lo stesso nome che avevi usato per rientrare al tuo posto.`),
+      nameInput,
+      el("button", { id: "recover-btn", class: "primary", onclick: () => recoverByName(roomId) }, "Rientra con questo nome"),
+      el("button", { class: "sound-test-btn", style: "margin-top:10px;", onclick: () => continueAsNewPlayer(roomId) }, "Sono nuovo, continua"),
+      el("button", { class: "sound-test-btn", style: "margin-top:6px;", onclick: renderLobby }, "◀ Cambia stanza")
+    )
+  );
+}
+
+async function recoverByName(roomId) {
+  const name = $("#recover-name-input").value.trim();
+  if (!name) return alert("Scrivi il tuo nome.");
+  try {
+    const snap = await roomRef(roomId).get();
+    const existing = normalizeState(snap.val());
+    const match = COLORS.find(
+      (c) =>
+        existing.players[c] &&
+        existing.players[c].name &&
+        existing.players[c].name.trim().toLowerCase() === name.trim().toLowerCase()
+    );
+    if (!match) {
+      alert("Non trovo nessun giocatore con questo nome in questa stanza. Controlla di averlo scritto esattamente come la prima volta, oppure continua come nuovo giocatore.");
+      return;
+    }
+    const claim = existing.players[match];
+    // "Riprende" il posto sul nuovo dispositivo: stesso meccanismo di
+    // claim-token già usato dalla modalità manuale, semplicemente
+    // riassegnato a questo dispositivo.
+    const newToken = getOrCreateClaimToken(roomId, match);
+    await roomRef(roomId).child("players").child(match).set({ name: claim.name, token: newToken });
+    myColor = match;
+    myRoomId = roomId;
+    myName = claim.name;
+    watchRoom(roomId, onStateChange);
+    renderGameShell();
+  } catch (e) {
+    alert("Non sono riuscito a farti rientrare: " + e.message);
+    console.error(e);
+  }
+}
+
+async function continueAsNewPlayer(roomId) {
+  try {
+    const snap = await roomRef(roomId).get();
+    const existing = normalizeState(snap.val());
+    if (existing.roomMode === "draw") {
+      renderDraftNameScreen(roomId);
+    } else {
+      renderManualLobby(roomId, existing.players || {});
+    }
+  } catch (e) {
+    alert("Non riesco a contattare il server, riprova.");
+    console.error(e);
+  }
+}
+
+function renderManualLobby(roomId, existingPlayers) {
+  const root = $("#app");
+  root.innerHTML = "";
+  myColor = null; // una selezione precedente potrebbe non essere più libera
+
+  const nameInput = el("input", {
+    id: "name-input",
+    placeholder: "il tuo nome",
+    value: myName || "",
+  });
+
+  // Le pedine sono raggruppate per squadra (TEAM_OF) invece che in una
+  // semplice griglia 2x2, con un badge "VS" al centro tra i due gruppi. I
+  // colori già presi da un altro giocatore in questa stanza sono disabilitati.
+  const takenColors = new Set(Object.keys(existingPlayers || {}));
+  const colorBtn = (c) =>
+    el("button", {
+      class: "color-btn color-" + c,
+      onclick: () => selectColor(c),
+      "data-color": c,
+      disabled: takenColors.has(c),
+    }, colorLabel(c) + (takenColors.has(c) ? " (preso)" : ""));
+  // Ogni posto libero può anche essere affidato al computer invece che a
+  // una persona — comodo per provare/giocare quando non siete in 4. Un
+  // posto già assegnato al computer si può anche liberare di nuovo (mai un
+  // posto occupato da una persona vera).
+  const botCell = (c) => {
+    const taken = existingPlayers && existingPlayers[c];
+    if (!taken) {
+      return el(
+        "button",
+        { class: "bot-btn", onclick: () => assignBotToColor(roomId, c) },
+        "🤖 Assegna al computer"
+      );
+    }
+    if (taken.isBot) {
+      return el(
+        "button",
+        { class: "bot-btn bot-btn-remove", onclick: () => removeBotFromColor(roomId, c) },
+        "🤖 Computer — libera"
+      );
+    }
+    return "";
+  };
+  const colorCell = (c) => el("div", { class: "color-cell" }, colorBtn(c), botCell(c));
+  const teamAColors = COLORS.filter((c) => TEAM_OF[c] === "A");
+  const teamBColors = COLORS.filter((c) => TEAM_OF[c] === "B");
+  const colorRow = el(
+    "div",
+    { class: "teams-grid" },
+    el("div", { class: "team-group" }, teamAColors.map(colorCell)),
+    el("div", { class: "team-group" }, teamBColors.map(colorCell)),
+    el("div", { class: "vs-badge" }, el("span", {}, "VS"))
+  );
+
+  root.appendChild(
+    el(
+      "div",
+      { class: "lobby-card" },
+      el("h1", {}, "Tock"),
+      el("p", { class: "muted" }, `Stanza ${roomId} — inserisci il tuo nome e scegli il tuo colore.`),
+      nameInput,
+      colorRow,
+      el("button", { id: "join-btn", class: "primary", onclick: () => joinManualRoom(roomId) }, "Entra nella stanza"),
+      el(
+        "div",
+        { class: "sound-test-row" },
+        el("button", { class: "sound-test-btn", onclick: renderLobby }, "◀ Cambia stanza"),
+        el("span", { class: "app-meta" }, `Tock by Mig · ${APP_VERSION} · © 2026 Mig`)
+      ),
+      homeScreenHint()
+    )
+  );
+}
+
+// Riconosce il sistema dal browser (iOS/iPadOS vs Android vs altro) per
+// mostrare istruzioni di installazione corrette: i passaggi per
+// "aggiungere a Home" sono diversi tra Safari (iPhone/iPad) e Chrome
+// (Android), quindi un testo unico era fuorviante su metà dei telefoni.
+function detectPlatform() {
+  const ua = navigator.userAgent || "";
+  const isIOS = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  if (isIOS) return "ios";
+  if (/Android/.test(ua)) return "android";
+  return "other";
+}
+
+// True se il gioco è già stato aperto come app installata (standalone) —
+// in tal caso il suggerimento non serve più.
+function isStandaloneDisplay() {
+  return (
+    (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
+    window.navigator.standalone === true
+  );
+}
+
+function homeScreenHint() {
+  if (localStorage.getItem("tock-hide-a2hs") === "1") return "";
+  if (isStandaloneDisplay()) return "";
+  const platform = detectPlatform();
+  const text =
+    platform === "ios"
+      ? "💡 Consiglio: tocca l'icona Condividi (il quadratino con la freccia in su) in Safari e scegli \"Aggiungi a Home\" per aprire il gioco a schermo intero come un'app."
+      : platform === "android"
+      ? "💡 Consiglio: apri il menu ⋮ in alto a destra in Chrome e scegli \"Installa app\" (o \"Aggiungi a schermata Home\") per aprire il gioco a schermo intero come un'app."
+      : "💡 Consiglio: usa la funzione \"Aggiungi a schermata Home\" del tuo browser per aprire il gioco a schermo intero come un'app.";
+  const box = el(
+    "div",
+    { class: "a2hs-hint" },
+    el("span", {}, text),
+    el("button", { class: "a2hs-close", onclick: (e) => { localStorage.setItem("tock-hide-a2hs", "1"); e.target.closest(".a2hs-hint").remove(); } }, "✕")
+  );
+  return box;
+}
+
+function colorLabel(c) {
+  return { red: "Rosso", green: "Verde", yellow: "Giallo", blue: "Blu" }[c];
+}
+function colorEmoji(c) {
+  return { red: "🔴", green: "🟢", yellow: "🟡", blue: "🔵" }[c];
+}
+
+// A small colored circle matching the game's own palette exactly — used
+// instead of a 🔴🟢🟡🔵 emoji wherever a color needs to be shown inline,
+// since emoji circles have a fixed color baked in by the platform and
+// never quite match our custom hex values.
+function swatchDot(color) {
+  return el("span", { class: "swatch swatch-" + color, style: "margin: 0 4px -2px 2px;" });
+}
+
+// Prefer the name the player chose when joining; fall back to the plain
+// color label if none was set (e.g. an older game, or left blank).
+function playerName(state, c) {
+  const p = state && state.players && state.players[c];
+  const n = p && p.name;
+  const base = n && n.trim() ? n.trim() : colorLabel(c);
+  return p && p.isBot ? base + " 🤖" : base;
+}
+
+function selectColor(c) {
+  myColor = c;
+  document.querySelectorAll(".color-btn").forEach((b) => b.classList.remove("selected"));
+  document.querySelector(`.color-${c}`).classList.add("selected");
+}
+
+async function joinManualRoom(roomId) {
+  unlockAudio();
+  const name = $("#name-input").value.trim();
+  if (!myColor) return alert("Scegli un colore.");
+  myRoomId = roomId;
+  myName = name || colorLabel(myColor);
+
+  const ref = roomRef(roomId);
+  const snap = await ref.get();
+  const claimToken = getOrCreateClaimToken(roomId, myColor);
+
+  if (!snap.exists()) {
+    const players = {};
+    players[myColor] = { name: myName, token: claimToken };
+    const state = newGameState(players, "manual");
+    await writeState(roomId, state);
+  } else {
+    const existing = snap.val().players && snap.val().players[myColor];
+    const sameName = existing && existing.name && myName &&
+      existing.name.trim().toLowerCase() === myName.trim().toLowerCase();
+    if (existing && existing.token && existing.token !== claimToken && !sameName) {
+      alert(`Il colore ${colorLabel(myColor)} è già stato scelto da ${existing.name || colorLabel(myColor)} in questa stanza. Scegline un altro, oppure rientra usando esattamente lo stesso nome per riprenderlo.`);
+      return;
+    }
+    // Due colori diversi con lo stesso nome mandano in confusione il
+    // rientro-per-nome più avanti (non saprebbe a quale colore restituire
+    // il posto), quindi lo blocchiamo già qui.
+    const otherPlayers = snap.val().players || {};
+    const nameTakenElsewhere = COLORS.some((c) => {
+      if (c === myColor) return false;
+      const p = otherPlayers[c];
+      return p && p.name && myName && p.name.trim().toLowerCase() === myName.trim().toLowerCase();
+    });
+    if (nameTakenElsewhere) {
+      alert(`Il nome "${myName}" è già usato da un altro giocatore in questa stanza. Scegline uno diverso (es. aggiungi un'iniziale).`);
+      return;
+    }
+    await ref.child("players").child(myColor).set({ name: myName, token: claimToken });
+  }
+
+  watchRoom(roomId, onStateChange);
+  renderGameShell();
+}
+
+// Affida un posto libero al computer, invece che a una persona — utile per
+// provare o giocare anche quando non siete in 4. Se la stanza non esiste
+// ancora (nessuno l'ha creata cliccando "Entra nella stanza"), il computer
+// può comunque essere il primo occupante: la creiamo qui allo stesso modo.
+async function assignBotToColor(roomId, color) {
+  unlockAudio();
+  try {
+    const ref = roomRef(roomId);
+    const snap = await ref.get();
+    if (!snap.exists()) {
+      const players = {};
+      players[color] = { name: "Computer", token: "BOT-" + color, isBot: true };
+      const state = newGameState(players, "manual");
+      await writeState(roomId, state);
+    } else {
+      await updateState(roomId, (state) => {
+        if (state.players[color]) throw new Error("questo colore è già stato preso");
+        state.players[color] = { name: "Computer", token: "BOT-" + color, isBot: true };
+      });
+    }
+  } catch (e) {
+    alert("Non riesco ad assegnare il computer: " + e.message);
+    return;
+  }
+  const snap2 = await roomRef(roomId).get();
+  renderManualLobby(roomId, (snap2.val() && snap2.val().players) || {});
+}
+
+// Libera un posto assegnato al computer (mai un posto occupato da una
+// persona vera — il controllo isBot dentro la transazione lo garantisce).
+async function removeBotFromColor(roomId, color) {
+  try {
+    await updateState(roomId, (state) => {
+      const p = state.players[color];
+      if (!p || !p.isBot) return; // non tocca un posto umano
+      delete state.players[color];
+    });
+  } catch (e) {
+    alert("Errore: " + e.message);
+    return;
+  }
+  const snap = await roomRef(roomId).get();
+  renderManualLobby(roomId, (snap.val() && snap.val().players) || {});
+}
+
+// A color, once claimed in a room, stays claimed by the same device/browser
+// (matched via a random token saved in localStorage) so it can always be
+// rejoined, while a different device trying to grab an already-taken color
+// gets blocked instead of silently stealing the seat.
+function getOrCreateClaimToken(roomId, color) {
+  const key = "tock-claim-" + roomId + "-" + color;
+  try {
+    let token = localStorage.getItem(key);
+    if (!token) {
+      token = Math.random().toString(36).slice(2) + Date.now().toString(36);
+      localStorage.setItem(key, token);
+    }
+    return token;
+  } catch (e) {
+    // localStorage unavailable (private mode, etc.) — fall back to a
+    // fresh token every time, which just means no reconnect protection.
+    return Math.random().toString(36).slice(2) + Date.now().toString(36);
+  }
+}
+
+// A room-scoped (not per-color) token used only during il flusso
+// "estrazione", prima che un colore sia assegnato — serve a riconoscere lo
+// stesso dispositivo se ricarica la pagina mentre si è ancora in attesa o a
+// metà del sorteggio.
+function getOrCreateRoomToken(roomId) {
+  const key = "tock-roomtoken-" + roomId;
+  try {
+    let token = localStorage.getItem(key);
+    if (!token) {
+      token = Math.random().toString(36).slice(2) + Date.now().toString(36);
+      localStorage.setItem(key, token);
+    }
+    return token;
+  } catch (e) {
+    return Math.random().toString(36).slice(2) + Date.now().toString(36);
+  }
+}
+
+// ================= Estrazione squadre =================
+//
+// Modalità alternativa alla lobby manuale: si entra con solo il nome, e
+// quando la stanza è piena (4 nomi) parte da sola, per tutti in
+// contemporanea (via Firebase), una sequenza di 3 passaggi:
+//  1. sorteggio delle coppie (chi gioca con chi)
+//  2. la coppia sceglie l'accoppiata di colori (Rosso+Giallo o Verde+Blu) —
+//     chi clicca per primo se la aggiudica
+//  3. ciascuno sceglie il proprio colore tra i due della propria squadra
+// Al termine, i colori finali vengono scritti in state.players esattamente
+// come nella modalità manuale, quindi da lì in poi il resto del gioco
+// (tabellone, mano, ecc.) non sa nemmeno che è stata usata un'estrazione.
+
+function renderDraftNameScreen(roomId) {
+  const root = $("#app");
+  root.innerHTML = "";
+  const nameInput = el("input", { id: "name-input", placeholder: "il tuo nome", value: myName || "" });
+  root.appendChild(
+    el(
+      "div",
+      { class: "lobby-card" },
+      el("h1", {}, "Tock"),
+      el("p", { class: "muted" }, `Stanza ${roomId} — modalità estrazione a sorte: qui non scegli il colore, solo il nome.`),
+      nameInput,
+      el("button", { id: "join-btn", class: "primary", onclick: () => joinDraftRoom(roomId) }, "Entra nella stanza"),
+      el("button", { class: "sound-test-btn", style: "margin-top:10px;", onclick: renderLobby }, "◀ Cambia stanza"),
+      homeScreenHint()
+    )
+  );
+}
+
+async function joinDraftRoom(roomId) {
+  unlockAudio();
+  const name = $("#name-input").value.trim();
+  if (!name) return alert("Inserisci il tuo nome.");
+  myRoomId = roomId;
+  myName = name;
+  myToken = getOrCreateRoomToken(roomId);
+
+  try {
+    const ref = roomRef(roomId);
+    const snap = await ref.get();
+    if (!snap.exists()) {
+      const state = newGameState({}, "draw");
+      state.draft.players[myToken] = myName;
+      state.draft.order.push(myToken);
+      await writeState(roomId, state);
+    } else {
+      const existing = normalizeState(snap.val());
+      if (existing.roomMode !== "draw") {
+        alert("Questa stanza è già in modalità manuale — scegli il colore.");
+        renderManualLobby(roomId, existing.players || {});
+        return;
+      }
+      await updateState(roomId, (state) => {
+        if (!state.draft.players[myToken] && Object.keys(state.draft.players).length >= 4) {
+          throw new Error("la stanza è già piena (4 giocatori)");
+        }
+        // Due giocatori con lo stesso nome mandano in confusione il
+        // rientro-per-nome più avanti (non saprebbe a chi dei due
+        // restituire il posto), quindi lo blocchiamo già qui.
+        const nameTaken = Object.entries(state.draft.players).some(
+          ([tok, n]) => tok !== myToken && n && n.trim().toLowerCase() === myName.trim().toLowerCase()
+        );
+        if (nameTaken) {
+          throw new Error(`"${myName}" è già stato usato da un altro giocatore in questa stanza. Scegli un nome diverso (es. aggiungi un'iniziale).`);
+        }
+        if (!state.draft.players[myToken]) state.draft.order.push(myToken);
+        state.draft.players[myToken] = myName;
+      });
+    }
+  } catch (e) {
+    alert("Non è entrato: " + e.message);
+    console.error(e);
+    return;
+  }
+
+  draftAnimShown.pairDraw = false;
+  watchRoom(roomId, onDraftStateChange);
+}
+
+function onDraftStateChange(state) {
+  if (!state) return;
+
+  // Se il mio colore finale è già stato assegnato, l'estrazione è
+  // conclusa: passo alla normale schermata di gioco, esattamente come la
+  // modalità manuale.
+  const myColorFound = COLORS.find((c) => state.players[c] && state.players[c].token === myToken);
+  if (myColorFound) {
+    myColor = myColorFound;
+    // Così un eventuale ricollegamento futuro passa dal normale
+    // meccanismo per-colore, condiviso con la modalità manuale.
+    try { localStorage.setItem("tock-claim-" + myRoomId + "-" + myColor, myToken); } catch (e) {}
+    roomRef(myRoomId).off("value");
+    watchRoom(myRoomId, onStateChange);
+    renderGameShell();
+    return;
+  }
+
+  maybeAdvanceDraft(state);
+  renderDraftScreen(state);
+}
+
+// Fa avanzare l'estrazione da uno stato all'altro. È chiamata da tutti e 4
+// i client ogni volta che lo stato cambia, ma ogni passaggio è protetto da
+// un controllo dentro la transazione Firebase, quindi anche se più client
+// la eseguono nello stesso istante il risultato viene scritto una volta
+// sola (gli altri tentativi diventano no-op).
+function maybeAdvanceDraft(state) {
+  const d = state.draft;
+  if (!d) return;
+
+  if (Object.keys(d.players).length === 4 && !d.pairDraw) {
+    updateState(myRoomId, (s) => {
+      if (s.draft.pairDraw) return; // già estratto da un altro client
+      const tokens = s.draft.order.filter((t) => s.draft.players[t]).slice(0, 4);
+      const shuffled = shuffle(tokens);
+      s.draft.pairDraw = { pairs: [[shuffled[0], shuffled[1]], [shuffled[2], shuffled[3]]] };
+    }).catch(() => {});
+    return;
+  }
+
+  if (d.pairDraw && Object.keys(d.colorPicks).length === 4 && Object.keys(state.players).length < 4) {
+    updateState(myRoomId, (s) => {
+      if (Object.keys(s.players).length >= 4) return; // già finalizzato
+      if (Object.keys(s.draft.colorPicks).length < 4) return;
+      for (const [token, color] of Object.entries(s.draft.colorPicks)) {
+        s.players[color] = { name: s.draft.players[token], token };
+      }
+    }).catch(() => {});
+  }
+}
+
+function renderDraftScreen(state) {
+  const d = state.draft;
+  const joined = Object.keys(d.players).length;
+  if (joined < 4 || !d.pairDraw) return renderDraftWaiting(state);
+  if (!d.pairChoice) return renderPairDrawScreen(state);
+  if (!d.colorPicks[myToken]) return renderSoloColorChoice(state);
+  return renderDraftFinalizing(state);
+}
+
+function renderDraftWaiting(state) {
+  const root = $("#app");
+  root.innerHTML = "";
+  const tokens = state.draft.order.filter((t) => state.draft.players[t]);
+  const items = [];
+  for (let i = 0; i < 4; i++) {
+    const t = tokens[i];
+    if (t) {
+      items.push(
+        el("li", {}, el("span", { class: "wdot" }), state.draft.players[t] + (t === myToken ? " (tu)" : ""))
+      );
+    } else {
+      items.push(el("li", { class: "pending" }, el("span", { class: "wdot off" }), `in attesa del ${i + 1}° giocatore...`));
+    }
+  }
+  root.appendChild(
+    el(
+      "div",
+      { class: "lobby-card" },
+      el("h1", {}, "Tock"),
+      el("p", { class: "muted" }, `Stanza ${myRoomId} — in attesa dei giocatori (${tokens.length}/4).`),
+      el("ul", { class: "waiting-list" }, items),
+      el("p", { class: "muted" }, "Appena arrivano tutti e 4, parte da sola l'estrazione delle coppie.")
+    )
+  );
+}
+
+function renderPairDrawScreen(state) {
+  const renderToken = ++draftPairRenderToken;
+  const root = $("#app");
+  root.innerHTML = "";
+  const [pairA, pairB] = state.draft.pairDraw.pairs;
+  const nameOf = (t) => state.draft.players[t] || "?";
+
+  root.appendChild(
+    el(
+      "div",
+      { class: "lobby-card" },
+      el("h1", {}, "Tock"),
+      el("p", { class: "muted" }, "Estrazione delle coppie..."),
+      el(
+        "div",
+        { class: "teams-grid" },
+        el(
+          "div",
+          { class: "team-group", id: "draft-team-a" },
+          el("div", { class: "player-slot", id: "draft-slot-a1" }, el("span", {}, "")),
+          el("div", { class: "player-slot", id: "draft-slot-a2" }, el("span", {}, ""))
+        ),
+        el(
+          "div",
+          { class: "team-group", id: "draft-team-b" },
+          el("div", { class: "player-slot", id: "draft-slot-b1" }, el("span", {}, "")),
+          el("div", { class: "player-slot", id: "draft-slot-b2" }, el("span", {}, ""))
+        ),
+        el("div", { class: "vs-badge" }, el("span", {}, "VS"))
+      ),
+      el("div", { id: "draft-pair-choice-wrap" })
+    )
+  );
+
+  if (draftAnimShown.pairDraw) {
+    showDraftSlotsInstant(pairA, pairB, nameOf);
+    renderPairChoiceButtons(state);
+  } else {
+    draftAnimShown.pairDraw = true;
+    animateDraftSlots(pairA, pairB, nameOf, renderToken).then(() => {
+      // Nel frattempo potrebbe essere arrivato un altro aggiornamento e lo
+      // schermo essere stato ridisegnato: in quel caso questa animazione è
+      // superata, non tocchiamo più nulla (l'ha già fatto il render nuovo).
+      if (renderToken !== draftPairRenderToken) return;
+      renderPairChoiceButtons(state);
+    });
+  }
+}
+
+function showDraftSlotsInstant(pairA, pairB, nameOf) {
+  const set = (id, text) => {
+    const s = document.getElementById(id);
+    if (s) s.querySelector("span").textContent = text;
+  };
+  set("draft-slot-a1", nameOf(pairA[0]));
+  set("draft-slot-a2", nameOf(pairA[1]));
+  set("draft-slot-b1", nameOf(pairB[0]));
+  set("draft-slot-b2", nameOf(pairB[1]));
+  const ta = document.getElementById("draft-team-a");
+  const tb = document.getElementById("draft-team-b");
+  if (ta) ta.classList.add("ready");
+  if (tb) tb.classList.add("ready");
+}
+
+async function animateDraftSlots(pairA, pairB, nameOf, renderToken) {
+  const pool = [nameOf(pairA[0]), nameOf(pairA[1]), nameOf(pairB[0]), nameOf(pairB[1])];
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const stale = () => renderToken !== draftPairRenderToken;
+  const spin = async (id, finalText, staggerMs) => {
+    await sleep(staggerMs);
+    if (stale()) return;
+    const slotEl = document.getElementById(id);
+    if (!slotEl) return;
+    const span = slotEl.querySelector("span");
+    slotEl.classList.add("spinning");
+    const start = Date.now();
+    while (Date.now() - start < 650) {
+      if (stale()) return;
+      span.textContent = pool[Math.floor(Math.random() * pool.length)];
+      await sleep(55);
+    }
+    if (stale()) return;
+    span.textContent = finalText;
+    slotEl.classList.remove("spinning");
+  };
+  await Promise.all([
+    spin("draft-slot-a1", nameOf(pairA[0]), 0),
+    spin("draft-slot-a2", nameOf(pairA[1]), 200),
+    spin("draft-slot-b1", nameOf(pairB[0]), 400),
+    spin("draft-slot-b2", nameOf(pairB[1]), 600),
+  ]);
+  if (stale()) return;
+  const ta = document.getElementById("draft-team-a");
+  const tb = document.getElementById("draft-team-b");
+  if (ta) ta.classList.add("ready");
+  if (tb) tb.classList.add("ready");
+  await sleep(150);
+}
+
+function renderPairChoiceButtons(state) {
+  const wrap = document.getElementById("draft-pair-choice-wrap");
+  if (!wrap) return;
+  wrap.innerHTML = "";
+  const [pairA, pairB] = state.draft.pairDraw.pairs;
+  const myPairIndex = pairA.includes(myToken) ? 0 : 1;
+  const partnerToken = (myPairIndex === 0 ? pairA : pairB).find((t) => t !== myToken);
+  const partnerName = state.draft.players[partnerToken] || "il tuo compagno";
+  wrap.appendChild(
+    el(
+      "div",
+      {},
+      el("p", { class: "muted" }, `La tua squadra: tu + ${partnerName}. Scegliete l'accoppiata di colori (chi clicca per primo se la aggiudica).`),
+      el(
+        "div",
+        { class: "pair-choice" },
+        el(
+          "button",
+          { class: "pair-btn pair-ry", onclick: () => pickColorPair(myPairIndex, "RY") },
+          el("span", { class: "dot-sm", style: "background:var(--red)" }), "Rosso",
+          el("span", { class: "dot-sm", style: "background:var(--yellow)" }), "Giallo"
+        ),
+        el(
+          "button",
+          { class: "pair-btn pair-gb", onclick: () => pickColorPair(myPairIndex, "GB") },
+          el("span", { class: "dot-sm", style: "background:var(--green)" }), "Verde",
+          el("span", { class: "dot-sm", style: "background:var(--blue)" }), "Blu"
+        )
+      )
+    )
+  );
+}
+
+async function pickColorPair(pairIndex, pick) {
+  try {
+    await updateState(myRoomId, (state) => {
+      if (state.draft.pairChoice) return; // già deciso da qualcun altro
+      state.draft.pairChoice = { pickIndex: pairIndex, pick };
+    });
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+function renderSoloColorChoice(state) {
+  const root = $("#app");
+  root.innerHTML = "";
+  const [pairA, pairB] = state.draft.pairDraw.pairs;
+  const myPairIndex = pairA.includes(myToken) ? 0 : 1;
+  const { pickIndex, pick } = state.draft.pairChoice;
+  const myPick = myPairIndex === pickIndex ? pick : (pick === "RY" ? "GB" : "RY");
+  const options = myPick === "RY" ? ["red", "yellow"] : ["green", "blue"];
+  const taken = new Set(Object.values(state.draft.colorPicks));
+
+  root.appendChild(
+    el(
+      "div",
+      { class: "lobby-card" },
+      el("h1", {}, "Tock"),
+      el("p", { class: "muted" }, `La tua squadra ha preso ${myPick === "RY" ? "Rosso + Giallo" : "Verde + Blu"}. Tu quale vuoi?`),
+      el(
+        "div",
+        { class: "solo-choice" },
+        options.map((c) =>
+          el(
+            "button",
+            { class: "solo-btn color-" + c, disabled: taken.has(c), onclick: () => pickSoloColor(c) },
+            colorLabel(c) + (taken.has(c) ? " (preso)" : "")
+          )
+        )
+      )
+    )
+  );
+}
+
+async function pickSoloColor(color) {
+  try {
+    await updateState(myRoomId, (state) => {
+      if (state.draft.colorPicks[myToken]) return; // già scelto
+      if (Object.values(state.draft.colorPicks).includes(color)) throw new Error("colore già preso dal tuo compagno");
+      const [pairA, pairB] = state.draft.pairDraw.pairs;
+      const myPair = pairA.includes(myToken) ? pairA : pairB;
+      const partnerToken = myPair.find((t) => t !== myToken);
+      const myPairIndex = pairA.includes(myToken) ? 0 : 1;
+      const { pickIndex, pick } = state.draft.pairChoice;
+      const myPick = myPairIndex === pickIndex ? pick : (pick === "RY" ? "GB" : "RY");
+      const options = myPick === "RY" ? ["red", "yellow"] : ["green", "blue"];
+      const otherColor = options.find((c) => c !== color);
+      state.draft.colorPicks[myToken] = color;
+      // Al compagno di squadra resta un solo colore possibile (quello che
+      // non hai preso tu): glielo assegniamo subito in automatico, così non
+      // deve cliccare anche lui/lei per confermarlo.
+      if (partnerToken && !state.draft.colorPicks[partnerToken]) {
+        state.draft.colorPicks[partnerToken] = otherColor;
+      }
+    });
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+function renderDraftFinalizing(state) {
+  const root = $("#app");
+  root.innerHTML = "";
+  // Mostra chi manca ancora, invece di un generico "in corso": se qualcuno
+  // ha chiuso la pagina a metà (es. un test con una scheda abbandonata), qui
+  // si vede subito chi è bloccato, invece di restare senza informazioni.
+  const d = state.draft;
+  const doneTokens = Object.keys(d.colorPicks);
+  const waitingNames = d.order
+    .filter((t) => d.players[t] && !doneTokens.includes(t))
+    .map((t) => d.players[t]);
+  root.appendChild(
+    el(
+      "div",
+      { class: "lobby-card" },
+      el("h1", {}, "Tock"),
+      el("p", { class: "muted" }, "Tu sei pronto! Avvio in corso..."),
+      waitingNames.length > 0
+        ? el("p", { class: "muted" }, `In attesa che scelga il colore: ${waitingNames.join(", ")}.`)
+        : el("p", { class: "muted" }, "Anche gli altri sono pronti, avvio imminente...")
+    )
+  );
+}
+
+// ---------------- Game shell ----------------
+
+function renderGameShell() {
+  const root = $("#app");
+  root.innerHTML = "";
+  root.appendChild(
+    el(
+      "div",
+      { class: "game-shell" },
+      el("div", { class: "top-bar" },
+        el("span", {}, "Stanza: " + myRoomId),
+        el("span", {}, "Sei: ", swatchDot(myColor), myName + " (" + colorLabel(myColor) + ")" +
+          " · squadra " + TEAM_LABEL[TEAM_OF[myColor]]),
+      ),
+      el("div", { id: "conn-banner" }),
+      el("div", { id: "dealer-draw-wrap" }),
+      el("div", { id: "board-wrap" }),
+      el("div", { id: "start-wrap" }),
+      el("div", { id: "exchange-wrap" }),
+      el("div", { id: "turn-indicator" }),
+      el("div", { id: "hand-wrap", class: "hand-row" }),
+      el("div", { id: "status-wrap" }),
+      el("div", { id: "picker-wrap" }),
+      el("div", { id: "chat-wrap" }),
+      el("div", { id: "log-wrap", class: "log-box" }),
+    )
+  );
+  boardSvg = buildBoardSVG($("#board-wrap"), BOARD);
+  watchConnection();
+}
+
+function watchConnection() {
+  try {
+    db.ref(".info/connected").on("value", (snap) => {
+      const banner = $("#conn-banner");
+      if (!banner) return;
+      banner.innerHTML = "";
+      if (snap.val() === false) {
+        banner.appendChild(el("div", { class: "conn-lost" }, "⚠️ Connessione persa — provo a riconnettermi..."));
+      }
+    });
+  } catch (e) {
+    // if this Firebase project doesn't have the .info path available for
+    // some reason, just skip the indicator rather than breaking the app
+    console.error(e);
+  }
+}
+
+// ---------------- Sounds ----------------
+// Short synthesized tones (no audio files needed) for: your turn starts,
+// you capture a pawn, one of your pawns gets captured, a Jack is played,
+// and a new chat message while the chat panel is collapsed. iOS Safari
+// only allows audio after a real user tap, so the AudioContext is created
+// lazily and "unlocked" on the first tap (joining the room).
+let audioCtx = null;
+// A silent audio clip, looped continuously in the background — often more
+// reliable than WebAudio alone for keeping iOS Safari's audio channel
+// open, which is why it's started (once) in the very same tap that first
+// unlocks audio.
+const SILENT_WAV_DATA_URI =
+  "data:audio/wav;base64,UklGRuwAAABXQVZFZm10IBAAAAABAAEAoA8AAKAPAAABAAgAZGF0YcgAAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==";
+let silentAudioEl = null;
+function startSilentKeepAlive() {
+  if (silentAudioEl) return;
+  try {
+    silentAudioEl = new Audio(SILENT_WAV_DATA_URI);
+    silentAudioEl.loop = true;
+    silentAudioEl.volume = 0.01;
+    silentAudioEl.play().catch(() => {});
+  } catch (e) {
+    silentAudioEl = null;
+  }
+}
+
+function unlockAudio() {
+  startSilentKeepAlive();
+  if (audioCtx) {
+    // already created earlier — if it went to sleep in the meantime,
+    // resume it right now, synchronously within this same tap
+    if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+    return;
+  }
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+    // iOS Safari needs an actual sound node started (not just the context
+    // created) during this same tap to truly unlock later playback — a
+    // near-silent one-sample blip does the job without being heard.
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    gain.gain.value = 0.0001;
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + 0.01);
+  } catch (e) {
+    audioCtx = null;
+  }
+}
+
+function beep(freq, startDelay, durationMs, type, gainPeak) {
+  if (!audioCtx) return;
+  const t0 = audioCtx.currentTime + startDelay;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type || "sine";
+  osc.frequency.setValueAtTime(freq, t0);
+  gain.gain.setValueAtTime(0, t0);
+  gain.gain.linearRampToValueAtTime(gainPeak || 0.2, t0 + 0.015);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + durationMs / 1000);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start(t0);
+  osc.stop(t0 + durationMs / 1000 + 0.02);
+}
+
+const SOUND_RECIPES = {
+  // a bright, friendly two-note rising chime
+  turnStart: () => { beep(660, 0, 130, "sine", 0.4); beep(880, 0.1, 180, "sine", 0.4); },
+  // a quick, satisfied downward "gulp"
+  captureMade: () => { beep(520, 0, 90, "triangle", 0.45); beep(330, 0.07, 160, "triangle", 0.42); },
+  // a lower, brief "uh-oh" thud
+  captureLost: () => { beep(220, 0, 90, "sawtooth", 0.4); beep(150, 0.08, 200, "sawtooth", 0.38); },
+  // a distinct alternating "swap" blip
+  jackPlayed: () => { beep(700, 0, 70, "square", 0.32); beep(500, 0.08, 70, "square", 0.32); beep(700, 0.16, 90, "square", 0.32); },
+  // a soft, unobtrusive notification pop
+  chatMessage: () => { beep(880, 0, 60, "sine", 0.28); },
+};
+
+// Called from every interactive tap in the game (a card, sending a chat
+// message, a picker button...) so the audio context has the best chance
+// of staying awake — a Firebase-triggered sound moments later then has a
+// much better chance of actually playing, since iOS only reliably keeps
+// audio alive shortly after a real tap.
+function keepAudioAlive() {
+  if (audioCtx && audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+}
+
+// A best-effort periodic nudge, on top of the tap-triggered one above: iOS
+// tends to suspend audio again after a few seconds of no direct touch, and
+// this can sometimes bring it back even without a fresh tap. Not
+// guaranteed — Safari's policy is strict — but it's the most that can be
+// done from the browser alone.
+setInterval(() => {
+  if (audioCtx && audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+}, 3000);
+
+function playSound(name) {
+  if (!audioCtx) return;
+  if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+  const recipe = SOUND_RECIPES[name];
+  if (recipe) recipe();
+}
+
+// Manual diagnostic: tap to hear a clear tone right away, decoupled from
+// any game event — isolates "audio doesn't work at all on this phone"
+// from "audio works but a specific event isn't triggering it".
+function testSound() {
+  unlockAudio();
+  if (!audioCtx) { alert("Il browser non supporta l'audio qui."); return; }
+  beep(523, 0, 150, "sine", 0.5);
+  beep(659, 0.13, 150, "sine", 0.5);
+  beep(784, 0.26, 220, "sine", 0.5);
+}
+
+// Tracks the last event of each kind this client has already reacted to,
+// so a sound plays exactly once per event, never replayed after a reload.
+const soundTracker = { turnColor: null, captureId: null, swapId: null, chatCount: null };
+
+function maybePlaySounds(state) {
+  if (state.phase === "playing") {
+    if (soundTracker.turnColor === null) {
+      soundTracker.turnColor = state.turnColor; // baseline on first sight, no sound
+    } else if (state.turnColor !== soundTracker.turnColor) {
+      soundTracker.turnColor = state.turnColor;
+      playSound("turnStart"); // everyone hears every turn change, not just the player whose turn it is
+    }
+  }
+
+  const cap = state.lastCapture;
+  if (cap && cap.id) {
+    if (soundTracker.captureId === null) {
+      soundTracker.captureId = cap.id;
+    } else if (cap.id !== soundTracker.captureId) {
+      soundTracker.captureId = cap.id;
+      const ageMs = Date.now() - (cap.ts || 0);
+      if (ageMs >= 0 && ageMs < 4000) playSound("captureMade"); // one shared sound for everyone, regardless of who captured whom
+    }
+  }
+
+  const swap = state.lastSwap;
+  if (swap && swap.id) {
+    if (soundTracker.swapId === null) {
+      soundTracker.swapId = swap.id;
+    } else if (swap.id !== soundTracker.swapId) {
+      soundTracker.swapId = swap.id;
+      const ageMs = Date.now() - (swap.ts || 0);
+      if (ageMs >= 0 && ageMs < 4000) playSound("jackPlayed");
+    }
+  }
+
+  const chatCount = (state.chat || []).length;
+  if (soundTracker.chatCount === null) {
+    soundTracker.chatCount = chatCount;
+  } else if (chatCount > soundTracker.chatCount) {
+    const last = state.chat[chatCount - 1];
+    soundTracker.chatCount = chatCount;
+    if (chatCollapsed && last && last.color !== myColor) playSound("chatMessage");
+  }
+}
+
+// ==================== Giocatore controllato dal computer ====================
+//
+// Un colore assegnato al computer (state.players[c].isBot) gioca da solo:
+// ogni client collegato, ad ogni cambio di stato, controlla se tocca a un
+// bot e — dopo una breve pausa "umana" — prova a giocare la mossa. Il
+// tentativo vero avviene dentro una transazione Firebase che ricontrolla
+// tutto da capo sui dati più recenti (stesso schema idempotente già usato
+// per l'estrazione, vedi maybeAdvanceDraft), quindi se più client ci
+// provano insieme la mossa viene comunque applicata una volta sola.
+//
+// Il bot valuta ogni mossa legale possibile (incluse tutte le combinazioni
+// di scambio col Jack e di suddivisione del 7) simulandone il risultato su
+// una copia delle pedine, e sceglie quella che lascia la squadra nella
+// posizione migliore: pedine più avanti/in casa, avversari mangiati,
+// proprie pedine il più possibile fuori dalla portata di un avversario
+// alle spalle.
+
+let botActionTimer = null;
+
+function maybeAdvanceBotTurn(state) {
+  if (!state || state.roomMode !== "manual") return;
+  if (state.phase === "exchanging") {
+    const waiting = COLORS.some((c) => state.players[c] && state.players[c].isBot && !state.pendingExchange[c]);
+    if (waiting) scheduleBotAction(botSubmitExchange);
+    return;
+  }
+  if (state.phase === "playing") {
+    const seat = state.turnColor;
+    if (seat && state.players[seat] && state.players[seat].isBot) {
+      scheduleBotAction(botPlayTurn);
+    }
+  }
+}
+
+function scheduleBotAction(fn) {
+  if (botActionTimer) return; // un tentativo è già in programma
+  const delay = 650 + Math.random() * 850; // pausa "umana", non istantanea
+  botActionTimer = setTimeout(() => {
+    botActionTimer = null;
+    fn().catch((e) => console.error("bot:", e));
+  }, delay);
+}
+
+async function botSubmitExchange() {
+  await updateState(myRoomId, (state) => {
+    if (state.phase !== "exchanging") return;
+    for (const c of COLORS) {
+      if (!(state.players[c] && state.players[c].isBot)) continue;
+      if (state.pendingExchange[c]) continue;
+      const card = botCardToGiveAway(state, c);
+      submitExchangeCard(state, c, card);
+    }
+  });
+}
+
+// Stima approssimativa di quanto sia prezioso tenere una carta in mano —
+// usata come spareggio finale tra mosse altrimenti equivalenti (senza
+// contesto sulla situazione della base: lì ci pensa botCardToGiveAway).
+function botCardUsefulness(card) {
+  const r = rankOf(card);
+  if (r === "J") return 90; // scambio: molto versatile
+  if (r === "7") return 80; // spacca su più pedine
+  if (r === "Q") return 60; // 12 avanti
+  if (r === "K") return 55; // ingresso, o 13 avanti a mazzo pieno
+  if (r === "A") return 50; // ingresso, o 1 avanti a mazzo pieno
+  if (r === "4") return 20; // solo indietro, la meno amata
+  return parseInt(r, 10) * 5; // 2..10: più alto, più utile
+}
+
+// Scelta della carta da regalare al compagno nello scambio alla cieca —
+// tiene conto di chi ha davvero bisogno di cosa — non solo il valore
+// generico della carta:
+//  - un Asso/Re che serve a far entrare una pedina dalla base: se serve al
+//    bot stesso se lo tiene, se serve solo al compagno glielo regala;
+//  - una carta che farebbe entrare SUBITO in casa una pedina già in gioco
+//    (propria o del compagno): stessa logica, priorità a sé stesso in caso
+//    di conflitto (il compagno ha comunque un'altra chance al giro dopo).
+function botCardToGiveAway(state, color) {
+  const hand = state.hands[color];
+  const partner = PARTNER_OF[color];
+  const ownNeedsEntry = pawnsInBase(state, color).length > 0;
+  const partnerNeedsEntry = pawnsInBase(state, partner).length > 0;
+  const ownHomeRanks = ranksThatEnterHomeFor(state, color);
+  const partnerHomeRanks = ranksThatEnterHomeFor(state, partner);
+
+  let best = hand[0], bestScore = Infinity;
+  for (const card of hand) {
+    let score = botCardUsefulness(card);
+    if (isEntryCard(card)) {
+      if (ownNeedsEntry) score += 40; // mi serve per entrare: la tengo
+      else if (partnerNeedsEntry) score -= 35; // a me non serve, al compagno sì: gliela regalo
+    }
+    const r = rankOf(card);
+    if (ownHomeRanks.has(r)) score += 45; // mi farebbe entrare subito in casa: la tengo
+    else if (partnerHomeRanks.has(r)) score -= 40; // farebbe entrare in casa il compagno: gliela regalo
+    if (score < bestScore) { bestScore = score; best = card; }
+  }
+  return best;
+}
+
+// Ranghi di carta (es. "6", "9", "Q"...) che, giocati SUBITO su una pedina
+// di `color` già in gioco sul percorso, la farebbero entrare in una delle
+// caselle-casa. Provato "a vuoto" su ogni valore possibile riusando
+// legalMovesForCard (il 4 è escluso: in questa variante va sempre
+// indietro, mai avanti; Jack e 7 sono carte speciali, non contano qui).
+const HOME_ENTRY_TEST_RANKS = ["A", "2", "3", "5", "6", "8", "9", "10", "Q", "K"];
+function ranksThatEnterHomeFor(state, color) {
+  const found = new Set();
+  for (const r of HOME_ENTRY_TEST_RANKS) {
+    const card = r + "-hearts"; // il seme non conta per le regole di movimento
+    const options = legalMovesForCard(state, color, card);
+    const entersHome = options.some(
+      (opt) => opt.type === "move" && opt.path && opt.path[opt.path.length - 1] >= 1000
+    );
+    if (entersHome) found.add(r);
+  }
+  return found;
+}
+
+async function botPlayTurn() {
+  await updateState(myRoomId, (state) => {
+    if (state.phase !== "playing") return;
+    const seat = state.turnColor;
+    if (!seat || !state.players[seat] || !state.players[seat].isBot) return;
+    const active = activeColorFor(state, seat);
+    if (!active) { advanceTurn(state); return; } // non dovrebbe capitare, sicurezza
+    const choice = botChooseCardAndMove(state, active, seat);
+    if (choice.burn) {
+      burnOneCard(state, seat, choice.card);
+    } else {
+      applyMove(state, active, choice.card, choice.move);
+    }
+    if (state.phase !== "finished") advanceTurn(state);
+  });
+}
+
+// Sceglie la migliore coppia (carta, mossa) tra TUTTE quelle disponibili
+// nella mano del bot — non solo la prima carta con una mossa legale.
+function botChooseCardAndMove(state, active, seat) {
+  const hand = state.hands[seat];
+  const botTeam = TEAM_OF[seat];
+  let best = null, bestScore = -Infinity;
+  for (const card of hand) {
+    for (const move of botCandidatesForCard(state, active, card)) {
+      const score = botScoreMove(state, active, card, move, botTeam) + Math.random() * 0.01;
+      if (score > bestScore) {
+        bestScore = score;
+        best = { card, move };
+      }
+    }
+  }
+  if (!best) {
+    // nessuna carta ha una mossa legale: se ne brucia una, la meno utile
+    return { burn: true, card: botCardToGiveAway(state, seat) };
+  }
+  return { burn: false, card: best.card, move: best.move };
+}
+
+// Espande le opzioni "grezze" di legalMovesForCard in mosse concrete,
+// pronte per essere simulate/applicate: un Jack diventa ogni possibile
+// coppia di pedine da scambiare, un 7 ogni possibile distribuzione valida.
+function botCandidatesForCard(state, active, card) {
+  const options = legalMovesForCard(state, active, card);
+  const moves = [];
+  for (const opt of options) {
+    if (opt.type === "move" || opt.type === "enter") {
+      moves.push(opt);
+    } else if (opt.type === "jack") {
+      const targets = jackableTargets(state);
+      for (let i = 0; i < targets.length; i++) {
+        for (let j = i + 1; j < targets.length; j++) {
+          moves.push({ type: "jack", a: targets[i], b: targets[j] });
+        }
+      }
+    } else if (opt.type === "seven") {
+      for (const distribution of botSevenDistributions(state, active)) {
+        moves.push({ type: "seven", distribution });
+      }
+    }
+  }
+  return moves;
+}
+
+function botSevenDistributions(state, color) {
+  const inPlay = state.pawns[color].map((p, i) => i).filter((i) => state.pawns[color][i] !== -1);
+  const results = [];
+  if (inPlay.length === 0) return results;
+  for (const idx of inPlay) {
+    const dist = [{ pawnIndex: idx, steps: 7 }];
+    if (sevenValidateDistribution(state, color, dist)) results.push(dist);
+  }
+  function tryAmounts(pawnIndices, remaining, idx, acc) {
+    if (idx === pawnIndices.length - 1) {
+      if (remaining <= 0) return;
+      const dist = acc.concat([{ pawnIndex: pawnIndices[idx], steps: remaining }]);
+      if (sevenValidateDistribution(state, color, dist)) results.push(dist);
+      return;
+    }
+    for (let s = 1; s < remaining; s++) {
+      tryAmounts(pawnIndices, remaining - s, idx + 1, acc.concat([{ pawnIndex: pawnIndices[idx], steps: s }]));
+    }
+  }
+  for (let size = 2; size <= inPlay.length; size++) {
+    for (const combo of kSubsets(inPlay, size)) tryAmounts(combo, 7, 0, []);
+  }
+  return results;
+}
+
+// Simula UNA mossa su una copia isolata delle pedine (mai lo stato vero) e
+// restituisce il risultato per la valutazione. Riusa le stesse funzioni di
+// regole del gioco vero (applyMove/applyJackSwap/applySevenDistribution),
+// così il bot valuta esattamente le stesse conseguenze che vedrebbe un
+// giocatore umano — capture comprese.
+function botSimulate(state, active, card, move) {
+  const clone = {
+    pawns: clonePawns(state.pawns),
+    lapped: state.lapped ? JSON.parse(JSON.stringify(state.lapped)) : {},
+    turnColor: state.turnColor,
+    hands: { red: [], green: [], yellow: [], blue: [] },
+    log: [],
+    lastSwap: null,
+    lastCapture: null,
+    phase: "playing",
+    winnerTeam: null,
+  };
+  if (move.type === "jack") applyJackSwap(clone, move.a, move.b);
+  else if (move.type === "seven") applySevenDistribution(clone, active, move.distribution);
+  else applyMove(clone, active, card, move);
+  return clone;
+}
+
+function botScoreMove(state, active, card, move, botTeam) {
+  const after = botSimulate(state, active, card, move);
+  let score = botEvaluateBoard(after.pawns, after.lapped, botTeam);
+  if (after.winnerTeam === botTeam) score += 100000;
+  return score;
+}
+
+// Punteggio della posizione risultante dal punto di vista della squadra
+// `forTeam`: quanta strada hanno fatto le proprie pedine (molto di più se
+// sono già in casa) meno quella delle avversarie, con una penalità per ogni
+// propria pedina lasciata a tiro (poche caselle davanti) di un avversario.
+function botEvaluateBoard(pawns, lapped, forTeam) {
+  let score = 0;
+  for (const c of COLORS) {
+    const sign = TEAM_OF[c] === forTeam ? 1 : -1;
+    for (let i = 0; i < 4; i++) {
+      const pos = pawns[c][i];
+      let val;
+      if (pos === -1) val = -4; // in base: meglio essere in gioco
+      else if (pos >= 1000) val = 100 + (pos - 1000) * 2; // in casa: sempre molto meglio
+      else val = stepsFromOwnBase(c, pos, lapped && lapped[c] && lapped[c][i]);
+      score += sign * val;
+    }
+  }
+  for (const c of COLORS) {
+    if (TEAM_OF[c] !== forTeam) continue;
+    for (let i = 0; i < 4; i++) {
+      const pos = pawns[c][i];
+      if (pos === -1 || pos >= 1000) continue;
+      for (const oc of COLORS) {
+        if (oc === c) continue;
+        for (let j = 0; j < 4; j++) {
+          const opos = pawns[oc][j];
+          if (opos === -1 || opos >= 1000) continue;
+          const dist = (pos - opos + 64) % 64; // passi che servirebbero all'avversario per arrivarci
+          if (dist >= 1 && dist <= 10) score -= (11 - dist) * 1.5;
+        }
+      }
+    }
+  }
+  return score;
+}
+
+function onStateChange(state) {
+  if (!state) return;
+  currentState = state;
+  maybeAdvanceBotTurn(state);
+  maybePlaySounds(state);
+  renderDealerDrawScreen(state);
+  renderStartControls(state);
+  renderExchangeControls(state);
+  renderPawns(boardSvg, BOARD, state.pawns, state.lastSwap, state.lastCapture);
+  renderTurnIndicator(state);
+  renderPlayerStatus(state);
+  renderHand(state);
+  renderChat(state);
+  renderLog(state);
+  if (state.phase === "finished") {
+    renderWinBanner(state);
+  } else {
+    // The banner is prepended straight into #app (outside the normal
+    // per-section re-render), so once the phase leaves "finished" — e.g.
+    // "Nuova partita" — nothing else ever takes it back down. Remove it
+    // explicitly here, every render, so it can never get stuck on screen.
+    const stale = $("#app").querySelector(".win-banner-backdrop");
+    if (stale) stale.remove();
+  }
+}
+
+// ---------------- Estrazione del mazziere (Asso di Cuori) ----------------
+//
+// Solo per la primissima mano di una stanza (vedi startGame). La sequenza
+// di carte è calcolata una volta sola e salvata in state.dealerDraw, così
+// l'animazione che vedono i 4 giocatori è identica; ogni client la anima
+// per conto proprio (locale, non sincronizzata mossa per mossa) e, alla
+// fine, uno qualsiasi dei 4 (il primo che ci arriva) scrive il risultato e
+// fa partire la mano vera e propria — protetto da un controllo di fase
+// dentro la transazione, quindi anche se più client ci arrivano insieme il
+// risultato viene applicato una volta sola.
+let dealerDrawAnimShown = { forRoom: null, done: false };
+
+function renderDealerDrawScreen(state) {
+  const wrap = $("#dealer-draw-wrap");
+  if (!wrap) return;
+
+  if (state.phase !== "dealerDraw" || !state.dealerDraw) {
+    wrap.innerHTML = "";
+    if (dealerDrawAnimShown.forRoom === myRoomId) dealerDrawAnimShown = { forRoom: null, done: false };
+    return;
+  }
+
+  if (dealerDrawAnimShown.forRoom === myRoomId) return; // già in corso o conclusa per questa stanza
+
+  dealerDrawAnimShown = { forRoom: myRoomId, done: false };
+  wrap.innerHTML = "";
+  const slotsByColor = {};
+  const grid = el("div", { class: "dealer-draw-grid" });
+  COLORS.forEach((c) => {
+    const slot = el(
+      "div",
+      { class: "dealer-slot", id: "dealer-slot-" + c },
+      el("div", { class: "dealer-slot-label" }, colorLabel(c))
+    );
+    slotsByColor[c] = slot;
+    grid.appendChild(slot);
+  });
+  wrap.appendChild(
+    el(
+      "div",
+      { class: "lobby-card" },
+      el("h1", {}, "Estrazione del mazziere"),
+      el("p", { class: "muted" }, "Si pescano le carte a turno: chi trova l'Asso di Cuori dà le carte per primo."),
+      grid,
+      el("div", { id: "dealer-draw-banner" })
+    )
+  );
+  animateDealerDraw(state.dealerDraw.sequence);
+}
+
+async function animateDealerDraw(sequence) {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  for (const step of sequence) {
+    const slot = document.getElementById("dealer-slot-" + step.color);
+    if (!slot) continue;
+    const old = slot.querySelector(".card-btn");
+    if (old) old.remove();
+    const btn = buildCardButton(step.card, true, () => {});
+    btn.classList.add("dealer-card-pop");
+    slot.appendChild(btn);
+    await sleep(550);
+  }
+  const winnerColor = sequence[sequence.length - 1].color;
+  const winnerSlot = document.getElementById("dealer-slot-" + winnerColor);
+  if (winnerSlot) winnerSlot.classList.add("dealer-winner");
+  const banner = document.getElementById("dealer-draw-banner");
+  if (banner) {
+    banner.textContent = `🎉 ${colorLabel(winnerColor)} dà le carte per primo!`;
+    banner.classList.add("show");
+  }
+  await sleep(1600);
+  dealerDrawAnimShown.done = true;
+  finishDealerDraw();
+}
+
+async function finishDealerDraw() {
+  try {
+    await updateState(myRoomId, (state) => {
+      if (state.phase !== "dealerDraw" || !state.dealerDraw) return; // un altro client è già passato oltre
+      state.dealerColor = state.dealerDraw.winnerColor;
+      state.dealerDraw = null;
+      dealNewHand(state); // porta la fase a "exchanging"
+    });
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+function renderStartControls(state) {
+  const wrap = $("#start-wrap");
+  wrap.innerHTML = "";
+  if (state.phase !== "lobby") return;
+  const joined = Object.keys(state.players || {});
+  wrap.appendChild(
+    el(
+      "div",
+      { class: "start-card" },
+      el("p", {}, `Giocatori nella stanza: ${joined.map(colorLabel).join(", ") || "nessuno"}`),
+      el("p", { class: "muted" }, "Servono tutti e 4 i colori per iniziare (rosso+giallo vs verde+blu)."),
+      el("button", { class: "primary", onclick: startGame }, "Inizia partita")
+    )
+  );
+}
+
+async function startGame() {
+  try {
+    await updateState(myRoomId, (state) => {
+      if (COLORS.some((c) => !state.players[c])) throw new Error("mancano giocatori");
+      if (!state.hasDealtBefore) {
+        // Primissima mano di questa stanza: prima si estrae il mazziere
+        // pescando le carte (vedi renderDealerDrawScreen), poi si distribuisce.
+        state.phase = "dealerDraw";
+        state.dealerDraw = buildDealerDrawSequence();
+      } else {
+        dealNewHand(state); // sets phase to "exchanging" itself
+      }
+    });
+  } catch (e) {
+    alert("Non è partita: " + e.message);
+    console.error(e);
+  }
+}
+
+// ---------------- Blind card exchange ----------------
+
+function renderExchangeControls(state) {
+  const wrap = $("#exchange-wrap");
+  wrap.innerHTML = "";
+  if (state.phase !== "exchanging") return;
+  const already = !!state.pendingExchange[myColor];
+  const partner = PARTNER_OF[myColor];
+  const doneColors = COLORS.filter((c) => !!state.pendingExchange[c]);
+  const waitingColors = COLORS.filter((c) => !state.pendingExchange[c]);
+  wrap.appendChild(
+    el(
+      "div",
+      { class: "start-card" },
+      el("p", {}, `Scambio alla cieca: scegli una carta da dare al tuo compagno (${playerName(state, partner)}).`),
+      el("p", { class: "muted" },
+        doneColors.length > 0
+          ? [`Hanno già scelto: `, ...doneColors.flatMap((c, i) => [swatchDot(c), playerName(state, c) + (i < doneColors.length - 1 ? ", " : ". ")])]
+          : "",
+        waitingColors.length > 0
+          ? [`In attesa di: `, ...waitingColors.flatMap((c, i) => [swatchDot(c), playerName(state, c) + (i < waitingColors.length - 1 ? ", " : ".")])]
+          : "Tutti pronti, avvio in corso..."
+      ),
+      already
+        ? el("p", {}, "✅ Hai già scelto la tua carta. In attesa degli altri...")
+        : el(
+            "div",
+            { class: "hand-row" },
+            state.hands[myColor].map((card) =>
+              buildCardButton(card, true, () => sendExchangeCard(card))
+            )
+          )
+    )
+  );
+}
+
+async function sendExchangeCard(card) {
+  keepAudioAlive();
+  try {
+    await updateState(myRoomId, (state) => {
+      submitExchangeCard(state, myColor, card);
+    });
+  } catch (e) {
+    alert("Errore nello scambio: " + e.message);
+  }
+}
+
+function renderPlayerStatus(state) {
+  const wrap = $("#status-wrap");
+  wrap.innerHTML = "";
+  if (state.phase !== "playing" && state.phase !== "exchanging") return;
+  const row = el("div", { class: "status-row" });
+  for (const c of COLORS) {
+    const isTurn = state.phase === "playing" && state.turnColor === c;
+    const isDealer = state.dealerColor === c;
+    row.appendChild(
+      el(
+        "div",
+        { class: "status-chip" + (isTurn ? " status-chip-active" : "") },
+        el("span", { class: "status-name" }, playerName(state, c)),
+        isDealer ? dealerIcon() : "",
+        miniPawnsRow(state.pawns[c], c)
+      )
+    );
+  }
+  wrap.appendChild(row);
+}
+
+// Small hand-drawn "stack of cards" icon marking the current dealer —
+// clearer at a glance than a single playing-card emoji.
+function dealerIcon() {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 40 40");
+  svg.setAttribute("class", "dealer-icon");
+  const g = document.createElementNS(ns, "g");
+  g.setAttribute("transform", "translate(20,20)");
+  const card = (x, y, rot) => {
+    const r = document.createElementNS(ns, "rect");
+    r.setAttribute("x", x);
+    r.setAttribute("y", y);
+    r.setAttribute("width", 16);
+    r.setAttribute("height", 20);
+    r.setAttribute("rx", 2.5);
+    r.setAttribute("fill", "#fffdf6");
+    r.setAttribute("stroke", "#3a2b22");
+    r.setAttribute("stroke-width", 1.4);
+    r.setAttribute("transform", `rotate(${rot})`);
+    return r;
+  };
+  g.appendChild(card(-11, -9, -14));
+  g.appendChild(card(-8, -10, 0));
+  g.appendChild(card(-5, -9, 14));
+  svg.appendChild(g);
+  return svg;
+}
+
+// Four small dots per player, one per pawn: hollow = still in base (not in
+// play), filled = out on the board (loop or home) — shows the exact pawn
+// count at a glance instead of a text tally.
+function miniPawnsRow(pawnPositions, color) {
+  const hex = { red: "#FF2D55", green: "#00E68A", yellow: "#F2C200", blue: "#00B0FF" }[color];
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 100 22");
+  svg.setAttribute("class", "mini-pawns");
+  pawnPositions.forEach((pos, i) => {
+    const cx = 12 + i * 25;
+    const inPlay = pos !== -1;
+    const home = pos >= 1000;
+    const c = document.createElementNS(ns, "circle");
+    c.setAttribute("cx", cx);
+    c.setAttribute("cy", 11);
+    c.setAttribute("r", 8);
+    c.setAttribute("fill", inPlay ? hex : "#ffffff");
+    c.setAttribute("stroke", hex);
+    c.setAttribute("stroke-width", 2.2);
+    svg.appendChild(c);
+    if (home) {
+      const dot = document.createElementNS(ns, "circle");
+      dot.setAttribute("cx", cx);
+      dot.setAttribute("cy", 11);
+      dot.setAttribute("r", 2.6);
+      dot.setAttribute("fill", "#ffffff");
+      svg.appendChild(dot);
+    }
+  });
+  return svg;
+}
+
+// ---------------- Turn / hand ----------------
+
+function formatElapsed(ms) {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+let turnTimerInterval = null;
+function ensureTurnTimerRunning() {
+  if (turnTimerInterval) return;
+  turnTimerInterval = setInterval(() => {
+    const span = document.getElementById("turn-timer");
+    if (!span || !currentState || currentState.phase !== "playing" || !currentState.turnStartedAt) return;
+    span.textContent = formatElapsed(Date.now() - currentState.turnStartedAt);
+  }, 1000);
+}
+
+function renderTurnIndicator(state) {
+  const wrap = $("#turn-indicator");
+  wrap.innerHTML = "";
+  if (state.phase !== "playing") return;
+  ensureTurnTimerRunning();
+  const active = activeColorFor(state, myColor);
+  const isMyTurn = state.turnColor === myColor;
+  const elapsedNow = state.turnStartedAt ? Date.now() - state.turnStartedAt : 0;
+  wrap.appendChild(
+    el(
+      "div",
+      { class: "turn-line" + (isMyTurn ? " my-turn" : "") },
+      el("span", { class: "swatch swatch-" + state.turnColor }),
+      el("strong", {}, ` Turno di ${playerName(state, state.turnColor)}`),
+      isMyTurn
+        ? el("span", { class: "you-badge" }, active === myColor ? " (tu)" : ` — muovi le pedine di ${playerName(state, active)}`)
+        : "",
+      el("span", { id: "turn-timer", class: "turn-timer" }, formatElapsed(elapsedNow))
+    )
+  );
+}
+
+function renderHand(state) {
+  const wrap = $("#hand-wrap");
+  wrap.innerHTML = "";
+  if (state.phase !== "playing") return;
+  const isMyTurn = state.turnColor === myColor;
+  const hand = state.hands[myColor] || [];
+  hand.forEach((card) => {
+    const btn = buildCardButton(card, isMyTurn, (e) => onCardClick(card, e));
+    wrap.appendChild(btn);
+  });
+}
+
+const RED_SUITS = { hearts: "♥", diamonds: "♦" };
+const BLACK_SUITS = { clubs: "♣", spades: "♠" };
+
+const SUIT_NAMES = { hearts: "hearts", diamonds: "diamonds", clubs: "clubs", spades: "spades" };
+
+function suitIconSvg(suit, size) {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("width", size);
+  svg.setAttribute("height", size);
+  const path = document.createElementNS(ns, "path");
+  const paths = {
+    hearts: "M12 21 C 6 15.5, 1.5 11.6, 1.5 7.6 C 1.5 4.3, 4 2 7 2 C 9 2, 10.8 3.1, 12 5 C 13.2 3.1, 15 2, 17 2 C 20 2, 22.5 4.3, 22.5 7.6 C 22.5 11.6, 18 15.5, 12 21 Z",
+    diamonds: "M12 1.5 L22 12 L12 22.5 L2 12 Z",
+    clubs: "M12 2.5 C14.4 2.5 16.3 4.4 16.3 6.8 C16.3 8.1 15.7 9.2 14.8 9.9 C16 9.6 17.3 9.6 18.4 10.2 C20.3 11.1 21.2 13.3 20.3 15.2 C19.4 17.1 17.2 18 15.3 17.1 C14.5 16.7 13.9 16.1 13.6 15.3 C13.8 17.2 14.4 19.1 15.4 21 L8.6 21 C9.6 19.1 10.2 17.2 10.4 15.3 C10.1 16.1 9.5 16.7 8.7 17.1 C6.8 18 4.6 17.1 3.7 15.2 C2.8 13.3 3.7 11.1 5.6 10.2 C6.7 9.6 8 9.6 9.2 9.9 C8.3 9.2 7.7 8.1 7.7 6.8 C7.7 4.4 9.6 2.5 12 2.5 Z",
+    spades: "M12 2 C12 2 4 9 4 14.5 C4 17.5 6.3 19.5 9 19.2 C10 19.1 10.9 18.7 11.5 18 C11.1 19.6 10.3 20.6 8.6 21.5 L15.4 21.5 C13.7 20.6 12.9 19.6 12.5 18 C13.1 18.7 14 19.1 15 19.2 C17.7 19.5 20 17.5 20 14.5 C20 9 12 2 12 2 Z",
+  };
+  path.setAttribute("d", paths[suit]);
+  path.setAttribute("fill", "currentColor");
+  svg.appendChild(path);
+  return svg;
+}
+
+function buildCardButton(card, enabled, onClick) {
+  const [r, s] = card.split("-");
+  const isRed = !!RED_SUITS[s];
+  const centerIcon = suitIconSvg(s, 24);
+  centerIcon.style.position = "absolute";
+  centerIcon.style.left = "50%";
+  centerIcon.style.top = "50%";
+  centerIcon.style.transform = "translate(-50%, -50%)";
+  return el(
+    "button",
+    {
+      class: "card-btn " + (isRed ? "suit-red" : "suit-black"),
+      disabled: !enabled,
+      onclick: onClick,
+    },
+    el("span", { class: "card-corner card-corner-tl" }, r),
+    centerIcon,
+    el("span", { class: "card-corner card-corner-br" }, r)
+  );
+}
+
+function cardLabel(card) {
+  const [r, s] = card.split("-");
+  const suitSym = { hearts: "♥", diamonds: "♦", clubs: "♣", spades: "♠" }[s];
+  return r + suitSym;
+}
+
+// A card is now always resolved in ONE turn: it either plays (possibly
+// after picking among several pawns / a Jack target / a 7 split), or —
+// if it genuinely has no legal use — it is burned right away. Either way
+// the turn advances by exactly one card.
+async function onCardClick(card, evt) {
+  keepAudioAlive();
+  const active = activeColorFor(currentState, myColor);
+  const options = legalMovesForCard(currentState, active, card);
+
+  if (options.length === 0) {
+    if (!confirm(`"${cardLabel(card)}" non ha mosse legali ora: la bruci e passi il turno?`)) return;
+    // Piccola animazione di "bruciatura" sulla carta cliccata, prima che
+    // sparisca davvero dallo stato — invece di sparire di scatto.
+    const btn = evt && evt.currentTarget;
+    if (btn && btn.classList) {
+      btn.classList.add("card-burning");
+      await new Promise((resolve) => setTimeout(resolve, 380));
+    }
+    await runUpdate((state) => {
+      // Burn from the current turn's OWN hand (same fix as applyMove — see
+      // its comment). Using `active` here was the bug: when a player's
+      // pawns are all home and they're playing a partner's turn, the card
+      // never actually left their hand, so it kept reappearing/blocking.
+      burnOneCard(state, state.turnColor, card);
+      advanceTurn(state);
+    });
+    return;
+  }
+
+  const opt = options[0];
+  if (opt.type === "jack") {
+    openJackPicker(active, card);
+    return;
+  }
+  if (opt.type === "seven") {
+    openSevenSplitter(active, card);
+    return;
+  }
+  if (options.length === 1) {
+    await playMove(active, card, opt);
+    return;
+  }
+  showPawnChoice(active, card, options);
+}
+
+// A picker (pawn choice, Jack, or the 7 splitter) is shown as a centered
+// overlay — fixed on screen — so it's always immediately visible without
+// scrolling, regardless of where the person is on the page when it opens.
+function openPicker(contentEl) {
+  const wrap = $("#picker-wrap");
+  wrap.innerHTML = "";
+  wrap.className = "picker-overlay";
+  wrap.appendChild(contentEl);
+  wrap.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+function closePicker() {
+  const wrap = $("#picker-wrap");
+  wrap.innerHTML = "";
+  wrap.className = "";
+}
+
+function showPawnChoice(active, card, options) {
+  openPicker(
+    el(
+      "div",
+      { class: "choice-box" },
+      el("p", {}, "Più mosse possibili con questa carta: scegli quale fare."),
+      options.map((opt) =>
+        el(
+          "button",
+          {
+            class: "secondary",
+            onclick: async () => { closePicker(); await playMove(active, card, opt); },
+          },
+          optionLabel(opt)
+        )
+      )
+    )
+  );
+}
+
+function optionLabel(opt) {
+  if (opt.type === "enter") return "Fai entrare una pedina";
+  if (opt.type === "move") {
+    const dest = opt.path[opt.path.length - 1];
+    const suffix = dest >= 1000 ? " — entra in casa" : " — continua il giro";
+    return `Pedina #${opt.pawnIndex + 1}${suffix}`;
+  }
+  return "Muovi";
+}
+
+async function playMove(active, card, move) {
+  if (isSelfCapture(currentState, active, move)) {
+    if (!confirm("Questa mossa mangia una tua pedina. Confermi?")) return;
+  }
+  try {
+    await runUpdate((state) => {
+      applyMove(state, active, card, move);
+      if (state.phase !== "finished") advanceTurn(state);
+    });
+  } catch (e) {
+    alert("Errore nel salvare la mossa: " + e.message);
+    console.error(e);
+  }
+}
+
+function isSelfCapture(state, color, move) {
+  if (move.type === "move") {
+    const dest = move.path[move.path.length - 1];
+    if (dest >= 1000) return false;
+    const occ = occupantAt(state, dest);
+    return !!occ && occ.color === color && occ.pawnIndex !== move.pawnIndex;
+  }
+  if (move.type === "enter") {
+    const occ = occupantAt(state, BOARD.baseIndex[color]);
+    return !!occ && occ.color === color;
+  }
+  return false;
+}
+
+async function runUpdate(mutatorFn) {
+  try {
+    await updateState(myRoomId, mutatorFn);
+  } catch (e) {
+    alert("Errore: " + e.message);
+    console.error(e);
+    throw e;
+  }
+}
+
+// ---------------- Jack picker ----------------
+
+function openJackPicker(active, card) {
+  jackPicked = [];
+  renderJackPicker(active, card);
+}
+
+function renderJackPicker(active, card) {
+  const targets = jackableTargets(currentState);
+  openPicker(
+    el(
+      "div",
+      { class: "choice-box" },
+      el("p", {}, `Jack: scegli due pedine da scambiare (${jackPicked.length}/2 selezionate).`),
+      targets.map((t) => {
+        const picked = jackPicked.some((p) => p.color === t.color && p.pawnIndex === t.pawnIndex);
+        return el(
+          "button",
+          {
+            class: "secondary" + (picked ? " selected" : ""),
+            onclick: () => toggleJackPick(active, card, t),
+          },
+          swatchDot(t.color), `${colorLabel(t.color)} #${t.pawnIndex + 1}`
+        );
+      }),
+      el("button", { class: "danger", onclick: () => { jackPicked = []; closePicker(); } }, "Annulla")
+    )
+  );
+}
+
+async function toggleJackPick(active, card, target) {
+  keepAudioAlive();
+  const already = jackPicked.findIndex((p) => p.color === target.color && p.pawnIndex === target.pawnIndex);
+  if (already !== -1) jackPicked.splice(already, 1);
+  else if (jackPicked.length < 2) jackPicked.push(target);
+
+  if (jackPicked.length === 2) {
+    const [a, b] = jackPicked;
+    closePicker();
+    jackPicked = [];
+    await playMove(active, card, { type: "jack", a, b });
+    return;
+  }
+  renderJackPicker(active, card);
+}
+
+// ---------------- Seven splitter ----------------
+
+function openSevenSplitter(active, card) {
+  const pawns = currentState.pawns[active]
+    .map((p, i) => ({ pawnIndex: i, pos: p }))
+    .filter((x) => x.pos !== -1);
+  sevenAllocation = {};
+  pawns.forEach((p) => (sevenAllocation[p.pawnIndex] = 0));
+  renderSevenSplitter(active, card, pawns);
+}
+
+function renderSevenSplitter(active, card, pawns) {
+  const total = Object.values(sevenAllocation).reduce((a, b) => a + b, 0);
+  const remaining = 7 - total;
+  openPicker(
+    el(
+      "div",
+      { class: "choice-box" },
+      el("p", {}, `7: distribuisci 7 passi tra le tue pedine (restano ${remaining}).`),
+      pawns.map((p) =>
+        el(
+          "div",
+          { class: "seven-row" },
+          el("span", {}, `Pedina #${p.pawnIndex + 1}`),
+          el("button", { class: "secondary", onclick: () => adjustSeven(active, card, pawns, p.pawnIndex, -1) }, "−"),
+          el("span", { class: "seven-val" }, String(sevenAllocation[p.pawnIndex])),
+          el("button", { class: "secondary", onclick: () => adjustSeven(active, card, pawns, p.pawnIndex, 1) }, "+")
+        )
+      ),
+      el(
+        "button",
+        {
+          class: "primary",
+          disabled: remaining !== 0,
+          onclick: () => confirmSeven(active, card),
+        },
+        "Conferma"
+      ),
+      el("button", { class: "danger", onclick: () => { sevenAllocation = null; closePicker(); } }, "Annulla")
+    )
+  );
+}
+
+function adjustSeven(active, card, pawns, pawnIndex, delta) {
+  const total = Object.values(sevenAllocation).reduce((a, b) => a + b, 0);
+  const next = sevenAllocation[pawnIndex] + delta;
+  if (next < 0) return;
+  if (delta > 0 && total >= 7) return;
+  sevenAllocation[pawnIndex] = next;
+  renderSevenSplitter(active, card, pawns);
+}
+
+async function confirmSeven(active, card) {
+  keepAudioAlive();
+  const distribution = Object.entries(sevenAllocation)
+    .map(([pawnIndex, steps]) => ({ pawnIndex: parseInt(pawnIndex, 10), steps }))
+    .filter((d) => d.steps > 0);
+  const valid = sevenValidateDistribution(currentState, active, distribution);
+  if (!valid) {
+    alert("Questa distribuzione non è valida (percorso bloccato o casella-casa occupata). Prova un'altra combinazione.");
+    return;
+  }
+  closePicker();
+  sevenAllocation = null;
+  await playMove(active, card, { type: "seven", distribution });
+}
+
+// ---------------- Chat ----------------
+
+let chatRenderedCount = -1; // avoid re-rendering (and losing input focus) needlessly
+let chatCollapsed = false;
+let chatSeenCount = 0; // messages the user has actually looked at (chat open)
+
+function renderChat(state) {
+  const wrap = $("#chat-wrap");
+  const messages = state.chat || [];
+  if (chatRenderedCount === messages.length && wrap.dataset.collapsed === String(chatCollapsed)) return;
+  chatRenderedCount = messages.length;
+  wrap.innerHTML = "";
+  wrap.dataset.collapsed = String(chatCollapsed);
+  if (!chatCollapsed) chatSeenCount = messages.length;
+  const unread = chatCollapsed ? Math.max(0, messages.length - chatSeenCount) : 0;
+
+  const title = el(
+    "div",
+    { class: "chat-title", onclick: toggleChat },
+    el("span", {}, "💬 Chat"),
+    el(
+      "span",
+      {},
+      unread > 0 ? el("span", { class: "chat-unread" }, String(unread)) : "",
+      el("span", { style: "margin-left:6px;" }, chatCollapsed ? "▸" : "▾")
+    )
+  );
+
+  if (chatCollapsed) {
+    wrap.appendChild(el("div", { class: "chat-box" }, title));
+    return;
+  }
+
+  const list = el("div", { id: "chat-messages", class: "chat-messages" });
+  messages.forEach((m) => list.appendChild(chatLine(m)));
+
+  const input = el("input", { id: "chat-input", placeholder: "Scrivi un messaggio..." });
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") sendChat();
+  });
+
+  wrap.appendChild(
+    el(
+      "div",
+      { class: "chat-box" },
+      title,
+      list,
+      el(
+        "div",
+        { class: "chat-input-row" },
+        input,
+        el("button", { class: "secondary", onclick: sendChat }, "Invia")
+      )
+    )
+  );
+  list.scrollTop = list.scrollHeight;
+}
+
+function toggleChat() {
+  chatCollapsed = !chatCollapsed;
+  chatRenderedCount = -1; // force a re-render
+  if (currentState) renderChat(currentState);
+}
+
+function chatLine(m) {
+  return el(
+    "div",
+    { class: "chat-line" },
+    el("span", { class: "swatch swatch-" + m.color, style: "margin-right:6px;" }),
+    el("strong", {}, playerName(currentState, m.color) + ": "),
+    el("span", {}, m.text)
+  );
+}
+
+async function sendChat() {
+  keepAudioAlive();
+  const input = $("#chat-input");
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = "";
+  try {
+    await updateState(myRoomId, (state) => {
+      postChatMessage(state, myColor, text);
+    });
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+// ---------------- Log / win ----------------
+
+const LOG_COLORS = ["red", "green", "yellow", "blue"];
+function detectLogColor(line) {
+  // pick whichever color name appears EARLIEST in the sentence — that's
+  // always the subject/actor of the log line — not just the first color
+  // checked in a fixed order (which broke lines like "Blu mangia Rosso").
+  let bestColor = null;
+  let bestIndex = Infinity;
+  for (const c of LOG_COLORS) {
+    const idx = line.indexOf(colorLabel(c));
+    if (idx !== -1 && idx < bestIndex) {
+      bestIndex = idx;
+      bestColor = c;
+    }
+  }
+  return bestColor;
+}
+
+const OLD_SUIT_SYMBOL = { hearts: "♥", diamonds: "♦", clubs: "♣", spades: "♠" };
+
+// Old log lines (written before this update) still use the raw English
+// color keys and card codes verbatim, since a log entry is stored exactly
+// as it happened and never gets rewritten later. This translates them for
+// DISPLAY only, on the fly, so a game that started before this change
+// still reads consistently in Italian.
+// Every name a color has ever been shown under, oldest first — so old log
+// lines (saved under an earlier name) still get translated and color-coded
+// correctly after a rename, not just brand-new lines.
+const LEGACY_COLOR_NAMES = {
+  red: ["red", "Rosso"],
+  green: ["green", "Verde"],
+  yellow: ["yellow", "Giallo", "Ambra", "Ocra"],
+  blue: ["blue", "Blu"],
+};
+
+function displayLogLine(line) {
+  let out = line;
+  for (const key of COLORS) {
+    const current = colorLabel(key);
+    for (const old of LEGACY_COLOR_NAMES[key]) {
+      if (old === current) continue;
+      out = out.replace(new RegExp(`\\b${old}\\b`, "g"), current);
+    }
+  }
+  out = out.replace(/\b([2-9]|10|[AKQJ])-(hearts|diamonds|clubs|spades)\b/g, (m, rank, suit) => rank + OLD_SUIT_SYMBOL[suit]);
+  return out;
+}
+
+let logExpanded = false;
+
+let logCollapsed = false;
+
+function renderLog(state) {
+  const wrap = $("#log-wrap");
+  wrap.innerHTML = "";
+  const all = state.log || [];
+
+  const header = el(
+    "div",
+    { class: "log-header", onclick: toggleLogCollapsed },
+    el("span", {}, `Registro (${all.length} mosse)`),
+    el("span", {}, logCollapsed ? "▸" : "▾")
+  );
+  wrap.appendChild(header);
+  if (logCollapsed) return;
+
+  const controls = el(
+    "div",
+    { class: "log-controls" },
+    all.length > 8
+      ? el("button", { class: "log-toggle", onclick: (e) => { e.stopPropagation(); toggleLog(); } }, logExpanded ? "Mostra solo recenti" : "Mostra tutto")
+      : "",
+    el("button", { class: "log-toggle", style: "margin-left:10px;", onclick: (e) => { e.stopPropagation(); downloadDebugDump(state); } }, "⬇ Scarica")
+  );
+  wrap.appendChild(controls);
+
+  const items = (logExpanded ? all : all.slice(-8)).slice().reverse();
+  items.forEach((rawLine) => {
+    const line = displayLogLine(rawLine);
+    const color = detectLogColor(line);
+    wrap.appendChild(
+      el(
+        "div",
+        { class: "log-line" },
+        color ? el("span", { class: "log-dot swatch-" + color }) : el("span", { class: "log-dot", style: "background:#cbbfa0;" }),
+        el("span", {}, line)
+      )
+    );
+  });
+}
+
+// Exports the full move log PLUS the current board state (positions,
+// hands, whose turn) as a plain-text file — everything needed to
+// reconstruct and check a reported bug, without screenshots.
+function downloadDebugDump(state) {
+  const lines = [];
+  lines.push(`Tock — registro completo (${new Date().toLocaleString("it-IT")})`);
+  lines.push(`Stanza: ${myRoomId}`);
+  lines.push("");
+  lines.push("=== STATO ATTUALE ===");
+  lines.push(`Fase: ${state.phase}`);
+  lines.push(`Turno: ${state.turnColor ? colorLabel(state.turnColor) : "-"}`);
+  for (const c of COLORS) {
+    const name = playerName(state, c);
+    lines.push(`${colorLabel(c)} (${name}): pedine=${JSON.stringify(state.pawns[c])} mano=${JSON.stringify(state.hands[c])}`);
+  }
+  lines.push("");
+  lines.push("=== REGISTRO MOSSE (in ordine) ===");
+  (state.log || []).forEach((line, i) => lines.push(`${i + 1}. ${displayLogLine(line)}`));
+
+  const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `tock-registro-${myRoomId}-${Date.now()}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+function toggleLog() {
+  logExpanded = !logExpanded;
+  if (currentState) renderLog(currentState);
+}
+
+function toggleLogCollapsed() {
+  logCollapsed = !logCollapsed;
+  if (currentState) renderLog(currentState);
+}
+
+function renderWinBanner(state) {
+  const root = $("#app");
+  if (root.querySelector(".win-banner-backdrop")) return;
+  const winners = COLORS.filter((c) => TEAM_OF[c] === state.winnerTeam);
+  const names = winners.map((c) => playerName(state, c)).join(" & ");
+  const banner = el(
+    "div",
+    { class: "win-banner" },
+    el("div", { class: "win-trophy" }, "🏆"),
+    el("h2", {}, `${TEAM_LABEL[state.winnerTeam]} ha vinto!`),
+    el("p", { class: "win-names" }, names),
+    el("button", { class: "primary", style: "margin-top:12px;width:auto;padding:10px 20px;", onclick: startNewGame }, "Nuova partita")
+  );
+  const backdrop = el("div", { class: "win-banner-backdrop" }, banner);
+  root.prepend(backdrop);
+  launchConfetti(winners);
+}
+
+async function startNewGame() {
+  keepAudioAlive();
+  try {
+    await runUpdate((state) => {
+      resetForNewGame(state);
+    });
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+function launchConfetti(winnerColors) {
+  const hexOf = { red: "#FF2D55", green: "#00E68A", yellow: "#F2C200", blue: "#00B0FF" };
+  const colors = winnerColors.map((c) => hexOf[c]).concat(["#D9B65C", "#ffffff"]);
+  const layer = document.createElement("div");
+  layer.className = "confetti-layer";
+  document.body.appendChild(layer);
+
+  const pieceCount = 90;
+  for (let i = 0; i < pieceCount; i++) {
+    const piece = document.createElement("div");
+    piece.className = "confetti-piece";
+    const left = Math.random() * 100;
+    const delay = Math.random() * 0.6;
+    const duration = 2.4 + Math.random() * 1.6;
+    const size = 6 + Math.random() * 7;
+    const rotStart = Math.random() * 360;
+    const drift = (Math.random() - 0.5) * 140;
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    const round = Math.random() < 0.5;
+    piece.style.left = left + "vw";
+    piece.style.width = size + "px";
+    piece.style.height = (round ? size : size * 1.5) + "px";
+    piece.style.background = color;
+    piece.style.borderRadius = round ? "50%" : "2px";
+    piece.style.animationDelay = delay + "s";
+    piece.style.animationDuration = duration + "s";
+    piece.style.setProperty("--drift", drift + "px");
+    piece.style.setProperty("--rot0", rotStart + "deg");
+    layer.appendChild(piece);
+  }
+  setTimeout(() => layer.remove(), 4800);
+}
+
+// ---------------- boot ----------------
+
+window.addEventListener("DOMContentLoaded", () => {
+  installDebugPanel();
+  initFirebase();
+  renderLobby();
+});
+
+function installDebugPanel() {
+  const panel = document.createElement("div");
+  panel.id = "debug-panel";
+  panel.style.cssText =
+    "position:fixed;top:0;left:0;right:0;z-index:9999;background:#c0392b;color:#fff;" +
+    "font-size:12px;padding:6px 10px;display:none;max-height:40vh;overflow-y:auto;white-space:pre-wrap;";
+  document.body.appendChild(panel);
+  function showError(msg) {
+    panel.style.background = "#c0392b";
+    panel.style.display = "block";
+    panel.textContent = "ERRORE: " + msg;
+  }
+  window.addEventListener("error", (e) => {
+    showError((e.message || "errore sconosciuto") + " (" + (e.filename || "") + ":" + (e.lineno || "") + ")");
+  });
+  window.addEventListener("unhandledrejection", (e) => {
+    showError("promise non gestita: " + (e.reason && e.reason.message ? e.reason.message : e.reason));
+  });
+}
+
+// Registra il service worker per rendere il gioco installabile (PWA) su
+// home screen. Ogni volta che pubblichi una nuova build, aggiorna
+// CACHE_VERSION in sw.js — così i telefoni scaricano subito la novità
+// invece di restare bloccati su una copia vecchia.
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
