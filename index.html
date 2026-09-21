@@ -378,9 +378,9 @@ button.danger:active {
 .last-card-line {
   display: flex; align-items: center; gap: 7px;
   padding: 6px 12px; margin: -4px 0 10px;
-  font-size: 0.78rem; color: #6b5b42;
-  background: linear-gradient(180deg, rgba(255,255,255,0.55), rgba(255,255,255,0.18));
-  border: 1px solid rgba(138,122,90,0.35);
+  font-size: 0.78rem; color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
   border-radius: 10px;
 }
 .last-card-text { flex-shrink: 0; }
@@ -2393,6 +2393,8 @@ function watchRoom(roomId, callback) {
 let presenceState = {};
 let presenceListenerRef = null;
 let myPresenceRef = null;
+let myPresenceConnId = null;
+let myPresenceRoomColor = null; // "roomId/color" attualmente presenziato
 let presenceConnListenerAttached = false;
 
 function watchPresence(roomId) {
@@ -2410,16 +2412,33 @@ function watchPresence(roomId) {
 // cade — anche senza preavviso (niente evento "onbeforeunload" da gestire
 // a mano, che comunque non scatterebbe per una connessione persa o un
 // crash del browser).
+//
+// Ogni CONNESSIONE (non ogni giocatore) scrive sotto una propria chiave
+// univoca (presence/<room>/<color>/<connId>) invece che un singolo booleano
+// condiviso su presence/<room>/<color>. Con un booleano unico, un reload di
+// pagina o una riconnessione mobile (rete che va e viene, app in background)
+// crea una gara: la VECCHIA connessione può registrare la sua rimozione
+// automatica e questa può arrivare al server DOPO che la NUOVA connessione
+// ha già scritto "online", cancellando per sbaglio una presenza che in
+// realtà è ancora attiva — il sintomo è esattamente "giocatore online ma
+// mostrato offline". Con una chiave per connessione, la rimozione di una
+// vecchia connessione morta non tocca la chiave della connessione nuova
+// ancora viva: il giocatore resta "online" finché resta almeno una chiave.
 function setupOwnPresence(roomId, color) {
-  const newRef = db.ref("presence/" + roomId + "/" + color);
-  if (myPresenceRef && myPresenceRef.toString() !== newRef.toString()) {
+  const roomColor = roomId + "/" + color;
+  const colorRef = db.ref("presence/" + roomId + "/" + color);
+  if (myPresenceRoomColor !== roomColor) {
     // Stavamo presenziando un'altra stanza/colore (es. "Cambia stanza"):
     // liberiamo quella voce, altrimenti resterebbe segnata online per
     // sempre lì (nessuna disconnessione reale è avvenuta per quel path).
-    myPresenceRef.onDisconnect().cancel();
-    myPresenceRef.remove().catch(() => {});
+    if (myPresenceRef) {
+      myPresenceRef.onDisconnect().cancel();
+      myPresenceRef.remove().catch(() => {});
+    }
+    myPresenceRoomColor = roomColor;
+    myPresenceConnId = colorRef.push().key;
   }
-  myPresenceRef = newRef;
+  myPresenceRef = colorRef.child(myPresenceConnId);
   const markOnline = () => {
     myPresenceRef.onDisconnect().remove();
     myPresenceRef.set(true);
@@ -3251,7 +3270,7 @@ function renderPawns(svg, board, pawns, lastSwap, lastCapture, lastHomeEntry) {
 // Bumped by hand each time a new build is produced — shown in the lobby so
 // it's obvious at a glance whether you're on the latest version, instead
 // of guessing from a stale browser tab or cache.
-const APP_VERSION = "v3.7";
+const APP_VERSION = "v3.8";
 
 let myColor = null;
 let myRoomId = null;
@@ -4613,7 +4632,10 @@ function maybeAdvanceBotTurn(state) {
 
 function scheduleBotAction(fn) {
   if (botActionTimer) return; // un tentativo è già in programma
-  const delay = 650 + Math.random() * 850; // pausa "umana", non istantanea
+  // Pausa "umana" tra una mossa dei bot e la successiva — abbastanza lunga
+  // da poter seguire cosa succede sul tabellone (prima era 0,65-1,5s, troppo
+  // rapida per leggere mossa/presa/animazione quando giocano più bot di fila).
+  const delay = 1700 + Math.random() * 1400; // 1,7s – 3,1s
   botActionTimer = setTimeout(() => {
     botActionTimer = null;
     fn().catch((e) => console.error("bot:", e));
@@ -5476,7 +5498,10 @@ function renderPlayerStatus(state) {
     const isTurn = state.phase === "playing" && state.turnColor === c;
     const isDealer = state.dealerColor === c;
     const isBotSeat = state.players[c] && state.players[c].isBot;
-    const isOnline = !!presenceState[c];
+    // presenceState[c] è un oggetto { connId: true, ... } — una chiave per
+    // ogni connessione viva di quel colore (vedi setupOwnPresence), non un
+    // singolo booleano: online finché ne resta almeno una.
+    const isOnline = !!presenceState[c] && Object.keys(presenceState[c]).length > 0;
     row.appendChild(
       el(
         "div",
